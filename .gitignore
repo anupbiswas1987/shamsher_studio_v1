@@ -1,0 +1,53 @@
+# Installed dependencies
+node_modules/
+
+# Vite production output and caches
+/dist/
+.vite/
+.cache/
+
+# Generated asset indexes (rebuilt by dev, build, and test scripts)
+/src/generated/asset-catalog.js
+/public/asset-catalog.json
+
+# Local environment and credentials; keep shareable examples
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+.aws/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Logs, test output, and coverage
+*.log
+/coverage/
+/.nyc_output/
+/test-results/
+/playwright-report/
+
+# Local editor and agent runtime files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.codex/sessions/
+.codex/logs/
+.codex/*.local.*
+*.code-workspace
+
+# OS files, temporary files, and editor backups
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*.tmp
+*.temp
+*.bak
+*~
+/tmp/
+/temp/

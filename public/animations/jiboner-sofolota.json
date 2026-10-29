@@ -1,0 +1,569 @@
+{
+  "version": 2,
+  "title": "জীবনের সফলতা",
+  "description": "Original Shomshar artwork, Bengali dialogue captions, movement and sound effects. No recorded narration.",
+  "scenes": [
+    {
+      "id": "df4c5ebc-ccd8-4eff-a605-e26507df0e3d",
+      "name": "শুরু",
+      "duration": 2.5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "idle",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/books",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "জীবনের সফলতা\nশমশেরের ছোট্ট পরামর্শ",
+      "captionStart": 0,
+      "captionEnd": 2.5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 2.5,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [
+        {
+          "id": "intro-chime",
+          "name": "Chime",
+          "start": 0.3
+        }
+      ],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": ""
+    },
+    {
+      "id": "d9fdd32e-d5ed-4452-b46c-87f420d1c592",
+      "name": "বন্ধুর প্রশ্ন",
+      "duration": 5.5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "idle",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/question",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "শমশের ভাই, জীবনে সফল\nহতে হলে কী করতে হবে?",
+      "captionStart": 0,
+      "captionEnd": 5.5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 5.5,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "বন্ধু"
+    },
+    {
+      "id": "a419dd06-7ead-4709-8c99-b0bd41130b6f",
+      "name": "লক্ষ্য ঠিক করুন",
+      "duration": 3.5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "talking",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/teacher",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "প্রথমে একটা লক্ষ্য\nঠিক করবেন!",
+      "captionStart": 0,
+      "captionEnd": 3.5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 3.5,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "শমশের"
+    },
+    {
+      "id": "325b356f-9fed-47db-94f4-9dc4a1327eb9",
+      "name": "তারপর?",
+      "duration": 2,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "idle",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/thinking",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "তারপর?",
+      "captionStart": 0,
+      "captionEnd": 2,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 2,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "বন্ধু"
+    },
+    {
+      "id": "6e4991d7-2dc3-4809-82fa-d6a3322d8e77",
+      "name": "শমশেরের বুদ্ধি",
+      "duration": 4.5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "idle",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/explaining",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "তারপর লক্ষ্যটা এমন\nজায়গায় রাখবেন,",
+      "captionStart": 0,
+      "captionEnd": 4.5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 4.5,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "শমশের"
+    },
+    {
+      "id": "cbece342-1f6c-4a51-b3f0-95083fdfb663",
+      "name": "ব্যর্থ হলেও…",
+      "duration": 4,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "idle",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/thinking",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "যেন ব্যর্থ হলেও\nবলতে পারেন—",
+      "captionStart": 0,
+      "captionEnd": 4,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 4,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "শমশের"
+    },
+    {
+      "id": "f13b8354-71f9-4f0a-a4a5-72aa72c6196a",
+      "name": "পাঞ্চলাইন",
+      "duration": 5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "cheerful",
+        "speed": 0.65,
+        "amount": 0.7
+      },
+      "poseSequence": [
+        {
+          "t": 0,
+          "character": "shomshar/teacher"
+        },
+        {
+          "t": 3.5,
+          "character": "shomshar/laughing"
+        }
+      ],
+      "poseTransition": 0.18,
+      "character": "shomshar/teacher",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f6dfab",
+      "caption": "লক্ষ্যটা অনেক\nউঁচুতে ছিল!",
+      "captionStart": 0,
+      "captionEnd": 5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 5,
+            "x": 6,
+            "y": 0,
+            "r": -2
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [
+        {
+          "id": "punchline-pop",
+          "name": "Pop",
+          "start": 0.2
+        },
+        {
+          "id": "punchline-chime",
+          "name": "Chime",
+          "start": 2
+        }
+      ],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": "শমশের"
+    },
+    {
+      "id": "2421477e-f578-45b1-84a8-8aeaebec3105",
+      "name": "শেষ হাসি",
+      "duration": 2.5,
+      "presentation": {
+        "mode": "comic",
+        "bubble": "top",
+        "tail": "right",
+        "camera": "gentle",
+        "transition": "cut"
+      },
+      "motion": {
+        "preset": "cheerful",
+        "speed": 0.8,
+        "amount": 0.8
+      },
+      "poseSequence": [],
+      "poseTransition": 0.18,
+      "character": "shomshar/laughing",
+      "characterPlayback": {
+        "fps": 0.5,
+        "loop": true
+      },
+      "background": {
+        "src": "",
+        "name": "Warm paper",
+        "visible": true,
+        "fit": "cover",
+        "x": 0,
+        "y": 0,
+        "scale": 1,
+        "opacity": 1,
+        "grid": false
+      },
+      "bg": "#f3e6cc",
+      "caption": "লক্ষ্য উঁচু হোক,\nহাসিটাও থাকুক!",
+      "captionStart": 0,
+      "captionEnd": 2.5,
+      "dialogue": true,
+      "props": [],
+      "keys": {
+        "Character": [
+          {
+            "t": 0,
+            "x": 0,
+            "y": 3,
+            "r": 0
+          },
+          {
+            "t": 0.6,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          },
+          {
+            "t": 2.5,
+            "x": 0,
+            "y": 0,
+            "r": 0
+          }
+        ]
+      },
+      "audio": [],
+      "sfx": [],
+      "storyTitle": "জীবনের সফলতা",
+      "speaker": ""
+    }
+  ]
+}
