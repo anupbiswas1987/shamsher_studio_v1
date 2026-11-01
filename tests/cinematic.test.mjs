@@ -219,7 +219,7 @@ test("shared renderer composes camera and transition at the requested time", () 
     ["scale", g.scale, g.scale],
   );
   near(calls.find((c) => c[0] === "globalAlpha")[1], 0.5);
-  const imageCall = calls.find((c) => c[0] === "drawImage");
+  const imageCall = calls.filter((c) => c[0] === "drawImage").at(-1);
   assert.equal(imageCall[1], image);
   near(imageCall[8] / imageCall[9], 720 / 1280);
   const hidden = [];
@@ -235,6 +235,75 @@ test("shared renderer composes camera and transition at the requested time", () 
   );
   renderReelFrame(hiddenCtx, [c], new Map([[1, image]]), 3.1);
   assert.ok(!hidden.includes("drawImage"));
+});
+test("contain fit draws a blurred or solid fill behind the fitted image", () => {
+  const image = { width: 800, height: 600 };
+  const makeContext = () => {
+    const calls = [];
+    return {
+      calls,
+      ctx: new Proxy(
+        {},
+        {
+          set: (_, key, value) => {
+            calls.push(["set", key, value]);
+            return true;
+          },
+          get:
+            (_, key) =>
+            (...args) =>
+              calls.push([key, ...args]),
+        },
+      ),
+    };
+  };
+
+  const blurred = makeContext();
+  renderReelFrame(
+    blurred.ctx,
+    [clip("static")],
+    new Map([[1, image]]),
+    1,
+  );
+  const blurredImageCalls = blurred.calls.filter(
+    (call) => call[0] === "drawImage",
+  );
+  assert.equal(blurredImageCalls.length, 2);
+  assert.deepEqual(blurred.calls.find((call) => call[1] === "filter"), [
+    "set",
+    "filter",
+    "blur(18px)",
+  ]);
+  near(blurredImageCalls[0][4] / blurredImageCalls[0][5], 800 / 600);
+
+  const solid = makeContext();
+  renderReelFrame(
+    solid.ctx,
+    [
+      {
+        ...clip("static"),
+        fitBackground: { mode: "color", color: "#123456" },
+      },
+    ],
+    new Map([[1, image]]),
+    1,
+  );
+  assert.deepEqual(
+    solid.calls.find((call) => call[0] === "fillRect"),
+    ["fillRect", 0, 0, 360, 640],
+  );
+  assert.ok(
+    solid.calls.some(
+      (call) =>
+        call[0] === "set" &&
+        call[1] === "fillStyle" &&
+        call[2] === "#123456",
+    ),
+  );
+  assert.equal(
+    solid.calls.filter((call) => call[0] === "drawImage").length,
+    1,
+  );
 });
 test("cover overscan preserves subtle zoom instead of flattening its motion", () => {
   const c = { ...clip(), fit: "cover" },

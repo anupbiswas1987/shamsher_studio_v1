@@ -43,6 +43,8 @@ export function draftSnapshot({
   volume,
   format,
   reducedMotion,
+  maxScreens,
+  maxReelDuration,
 }) {
   return {
     version: 2,
@@ -52,5 +54,7 @@ export function draftSnapshot({
     volume,
     format,
     reducedMotion,
+    maxScreens,
+    maxReelDuration,
   };
 }

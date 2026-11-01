@@ -353,6 +353,28 @@ export function renderClip(ctx, clip, image, time, options = {}) {
   const g = evaluateClip(clip, image, time, options);
   ctx.save();
   ctx.globalAlpha = g.opacity;
+  if (clip.fit === "contain") {
+    const background = clip.fitBackground || {};
+    if (background.mode === "color") {
+      ctx.fillStyle = background.color || "#292630";
+      ctx.fillRect(0, 0, 360, 640);
+    } else {
+      const blur = clamp(finite(background.blur, 18), 0, 32);
+      const scale = Math.max(360 / image.width, 640 / image.height);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      ctx.save();
+      ctx.filter = `blur(${blur}px)`;
+      ctx.drawImage(
+        image,
+        (360 - width) / 2,
+        (640 - height) / 2,
+        width,
+        height,
+      );
+      ctx.restore();
+    }
+  }
   ctx.translate(g.x, g.y);
   ctx.rotate((g.rotation * Math.PI) / 180);
   ctx.scale(g.scale, g.scale);

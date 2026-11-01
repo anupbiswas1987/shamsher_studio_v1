@@ -1,0 +1,57 @@
+.screen-studio .screen-notice {
+  position: fixed;
+  z-index: 1000;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  color: #f5f2fa;
+  background: #27213a;
+  border: 1px solid #78639b;
+  border-left: 4px solid #b99add;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  line-height: 1.5;
+}
+
+.screen-notice > strong {
+  color: #d7baf4;
+}
+
+.screen-notice > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.screen-studio .screen-notice > button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 4px 10px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.screen-studio .screen-notice-success {
+  background: #173a2d;
+  border-color: #4a9b70;
+  border-left-color: #66d495;
+}
+
+.screen-notice-success > strong {
+  color: #8ce2ad;
+}
+
+.screen-studio .screen-notice-error {
+  background: #451f28;
+  border-color: #ad5360;
+  border-left-color: #ff7b83;
+}
+
+.screen-notice-error > strong {
+  color: #ff9ca2;
+}

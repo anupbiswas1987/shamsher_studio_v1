@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { download } from "./engine";
-import {LOGO_SRC,LOGO_ALT} from "./branding";
+import { LOGO_ALT, LOGO_SRC } from "./branding";
 import "./screen-studio.css";
+import "./screen-notice.css";
+import "./screen-tabs.css";
 import { resetScreenTiming } from "./screen-timing";
 import {
   createAnimation,
@@ -15,25 +17,43 @@ import {
   draftSnapshot,
 } from "./screen-draft";
 import { SCREEN_EXPORT } from "./screen-export";
-const makeScreen = (i) => ({
-  id: i + 1,
-  start: Math.min(i * 3, 27),
-  end: Math.min((i + 1) * 3, 30),
+const DEFAULT_MAX_SCREENS = 30;
+const DEFAULT_MAX_DURATION = 30;
+const requiredDraftDuration = (screens, audioStart = 0) =>
+  Math.max(
+    0.1,
+    Number.isFinite(audioStart) ? audioStart : 0,
+    ...screens.map((screen) => screen.end || 0),
+  );
+const makeScreen = (i, maxDuration = DEFAULT_MAX_DURATION, id = i + 1) => {
+  const start = Math.min(i * 3, Math.max(0, maxDuration - 0.1));
+  return {
+  id,
+  start,
+  end: Math.min(start + 3, maxDuration),
   entry: "None",
   exit: "None",
   transition: 0.7,
   fit: "cover",
+  fitBackground: { mode: "blur", color: "#292630", blur: 18 },
   animation: createAnimation("static"),
-});
+  };
+};
 const styles = ["None", "Fade", "Slide left", "Slide right", "Slide up", "Slide down", "Zoom"];
 export default function ScreenStudio() {
+  const [activeTab, setActiveTab] = useState("Screen");
+  const [expandedScreenFields, setExpandedScreenFields] = useState({});
   const [screens,setScreens]=useState(()=>[makeScreen(0)]),
+    [maxScreens,setMaxScreens]=useState(DEFAULT_MAX_SCREENS),
+    [maxScreensInput,setMaxScreensInput]=useState(String(DEFAULT_MAX_SCREENS)),
+    [maxReelDuration,setMaxReelDuration]=useState(DEFAULT_MAX_DURATION),
+    [maxReelDurationInput,setMaxReelDurationInput]=useState(String(DEFAULT_MAX_DURATION)),
     [time,setTime]=useState(0),
     [playing, setPlaying] = useState(false),
     [audio,setAudio]=useState(null),
     [audioStart,setAudioStart]=useState(0),
     [volume,setVolume]=useState(1),
-    [notice, setNotice] = useState(""),
+    [notice, setNotice] = useState(null),
     [exporting, setExporting] = useState(false),
     [exportStatus, setExportStatus] = useState(""),
     [result, setResult] = useState(null),
@@ -45,21 +65,35 @@ export default function ScreenStudio() {
     [reducedMotion,setReducedMotion]=useState(()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const saveQueue = useRef(Promise.resolve()),
     saveVersion = useRef(0);
+  const skipNextDraftSave = useRef(false);
+  const nextScreenId = useRef(2);
+  const maxScreensValue = useRef(DEFAULT_MAX_SCREENS);
+  const maxReelDurationValue = useRef(DEFAULT_MAX_DURATION);
   const canvas=useRef(),images=useRef(new Map()),sound=useRef(),live=useRef(),urls=useRef(new Set());
   const duration=Math.max(1,...screens.filter(s=>s.src).map(s=>s.end));
+  const requiredDuration=Math.max(0.1,audioStart,...screens.map(s=>s.end||0));
   live.current={screens,time,duration};
+  function notify(message, type = "info") {
+    setNotice({ message, type });
+  }
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 30000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   function resetTiming() {
     if (!draftReady || exporting) return;
     try {
-      const next = resetScreenTiming(screens);
+      const next = resetScreenTiming(screens, maxReelDuration);
       setPlaying(false);
       setTime(0);
       setScreens(next);
-      setNotice(
-        "Timing reset to screen order: 3 seconds per screen, with no overlap.",
+      notify(
+        `Timing reset in screen order within the ${maxReelDuration}s reel limit.`,
+        "success",
       );
     } catch (e) {
-      setNotice(e.message);
+      notify(e.message, "error");
     }
   }
   function moveScreen(id, targetId) {
@@ -76,6 +110,19 @@ export default function ScreenStudio() {
     });
     setDraggedScreen(null);
     setDropScreen(null);
+  }
+  function removeScreen(id) {
+    const screen = screens.find((item) => item.id === id);
+    if (!screen || screens.length <= 1) return;
+    if (!window.confirm(`Remove screen ${id} from this reel?`)) return;
+    if (screen.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(screen.src);
+      urls.current.delete(screen.src);
+    }
+    images.current.delete(id);
+    setPlaying(false);
+    setTime(0);
+    setScreens((current) => current.filter((item) => item.id !== id));
   }
   const update = (id, change) => {
     setPlaying(false);
@@ -135,17 +182,38 @@ export default function ScreenStudio() {
           );
           if (!active) return;
           setScreens(restored);
+          nextScreenId.current =
+            Math.max(0, ...restored.map((screen) => screen.id)) + 1;
+          const restoredMaxDuration = Math.max(
+            requiredDraftDuration(restored, draft.audioStart),
+            Number.isFinite(draft.maxReelDuration) && draft.maxReelDuration > 0
+              ? draft.maxReelDuration
+              : DEFAULT_MAX_DURATION,
+          );
+          const restoredMaxScreens = Math.max(
+            restored.length,
+            Number.isInteger(draft.maxScreens) && draft.maxScreens > 0
+              ? draft.maxScreens
+              : DEFAULT_MAX_SCREENS,
+          );
+          maxScreensValue.current = restoredMaxScreens;
+          setMaxScreens(restoredMaxScreens);
+          setMaxScreensInput(String(restoredMaxScreens));
+          maxReelDurationValue.current = restoredMaxDuration;
+          setMaxReelDuration(restoredMaxDuration);
+          setMaxReelDurationInput(String(restoredMaxDuration));
 
           if(typeof draft.reducedMotion==='boolean')setReducedMotion(draft.reducedMotion);
           if(draft.audio?.file){const src=URL.createObjectURL(draft.audio.file);urls.current.add(src);setAudio({...draft.audio,src})}
           setAudioStart(draft.audioStart??0);setVolume(draft.volume??1);setFormat(draft.format||'mp4');
-          setNotice("Your saved reel draft has been restored.");
+          notify("Your saved reel draft has been restored.", "success");
         }
         setDraftReady(true);
       } catch {
         setDraftStatus("Draft could not be restored.");
-        setNotice(
+        notify(
           "Could not open the local draft. Reload to retry, or clear the draft to start again.",
+          "error",
         );
       }
     }
@@ -156,8 +224,21 @@ export default function ScreenStudio() {
   }, []);
   useEffect(() => {
     if (!draftReady) return;
+    if (skipNextDraftSave.current) {
+      skipNextDraftSave.current = false;
+      return;
+    }
     const version = ++saveVersion.current;
-    const snapshot=draftSnapshot({screens,audio,audioStart,volume,format,reducedMotion});
+    const snapshot=draftSnapshot({
+      screens,
+      audio,
+      audioStart,
+      volume,
+      format,
+      reducedMotion,
+      maxScreens,
+      maxReelDuration,
+    });
     setDraftStatus("Saving draft…");
     saveQueue.current = saveQueue.current
       .catch(() => {})
@@ -172,24 +253,38 @@ export default function ScreenStudio() {
           setDraftStatus("Draft save failed — device storage may be full");
       },
     );
-  }, [draftReady,screens,audio,audioStart,volume,format,reducedMotion]);
+  }, [draftReady,screens,audio,audioStart,volume,format,reducedMotion,maxScreens,maxReelDuration]);
   async function discardDraft() {
     if (!window.confirm("Clear this draft and all uploaded screens and audio?"))
       return;
     setPlaying(false);
     try {
+      saveVersion.current += 1;
       await saveQueue.current.catch(() => {});
       await clearScreenDraft();
+      skipNextDraftSave.current = true;
       images.current.clear();
       setScreens([makeScreen(0)]);
+      setExpandedScreenFields({});
+      nextScreenId.current = 2;
 
       setAudio(null);setAudioStart(0);setVolume(1);setFormat("mp4");
+      setReducedMotion(
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+      maxScreensValue.current = DEFAULT_MAX_SCREENS;
+      setMaxScreens(DEFAULT_MAX_SCREENS);
+      setMaxScreensInput(String(DEFAULT_MAX_SCREENS));
+      maxReelDurationValue.current = DEFAULT_MAX_DURATION;
+      setMaxReelDuration(DEFAULT_MAX_DURATION);
+      setMaxReelDurationInput(String(DEFAULT_MAX_DURATION));
       setTime(0);
       setResult(null);
       setDraftReady(true);
-      setNotice("Draft cleared. You can start a new reel.");
+      setDraftStatus("Draft cleared on this device");
+      notify("Draft cleared. You can start a new reel.", "success");
     } catch {
-      setNotice("Could not clear the draft. Please try again.");
+      notify("Could not clear the draft. Please try again.", "error");
     }
   }
 
@@ -206,7 +301,7 @@ export default function ScreenStudio() {
   },[playing]);
   useEffect(()=>{
     const el=sound.current;if(!el||!audio)return;el.volume=volume;const relative=time-audioStart;
-    if(playing&&relative>=0&&relative<audio.duration){if(el.paused||Math.abs(el.currentTime-relative)>.25){el.currentTime=relative;el.play().catch(()=>{setPlaying(false);setNotice('Audio playback failed. Please replace the audio file.')})}}else el.pause()
+    if(playing&&relative>=0&&relative<audio.duration){if(el.paused||Math.abs(el.currentTime-relative)>.25){el.currentTime=relative;el.play().catch(()=>{setPlaying(false);notify('Audio playback failed. Please replace the audio file.','error')})}}else el.pause()
   },[playing,time,audio,audioStart,volume]);
   async function upload(file, id) {
     if (!file) return;
@@ -224,14 +319,14 @@ export default function ScreenStudio() {
         setTime(target.start);
 
       }
-      setNotice("Screen uploaded. Adjust its timing and animations below.");
+      notify("Screen uploaded. Adjust its timing and animations below.", "success");
     } catch (e) {
-      setNotice(e.message);
+      notify(e.message, "error");
     }
   }
   async function addAudio(file){
     if(!file)return;const url=URL.createObjectURL(file);urls.current.add(url);const el=new Audio(url);
-    el.onloadedmetadata=()=>{setPlaying(false);setAudio({src:url,file,name:file.name,duration:el.duration})};el.onerror=()=>setNotice('Could not read this audio file. Try MP3 or WAV.')
+    el.onloadedmetadata=()=>{setPlaying(false);setAudio({src:url,file,name:file.name,duration:el.duration})};el.onerror=()=>notify('Could not read this audio file. Try MP3 or WAV.','error')
   }
   async function exportVideo() {
     setPlaying(false);
@@ -255,7 +350,7 @@ export default function ScreenStudio() {
         urls.current.add(url);
         setResult({ url, format });
         download(blob, "shomshar-screens.mp4");
-        setNotice("MP4 ready. Use Download MP4 if the download did not start.");
+        notify("MP4 ready. Use Download MP4 if the download did not start.", "success");
         return;
       }
       setExportStatus("Preparing video…");
@@ -321,11 +416,12 @@ export default function ScreenStudio() {
       urls.current.add(url);
       setResult({ url, format });
       download(blob, `shomshar-screens.${format}`);
-      setNotice(
+      notify(
         `${format.toUpperCase()} ready. Use the download link if the download did not start.`,
+        "success",
       );
     } catch (e) {
-      setNotice(e.message);
+      notify(e.message, "error");
     } finally {
       if (rec?.state === "recording") rec.stop();
       try {
@@ -340,27 +436,15 @@ export default function ScreenStudio() {
   return (
     <div className="screen-studio">
       <header>
-        <a className="brand" href="/" aria-label="Shomshar Animation Studio home"><img className="brand-logo" src={LOGO_SRC} alt={LOGO_ALT} width="2172" height="724"/></a>
-        <a href="/">Back to animation studio</a>
-        <label className="screen-export-format">
-          Video type
-          <select
-            aria-label="Export video type"
-            disabled={!draftReady || exporting}
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-          >
-            <option value="mp4">MP4 (H.264 + AAC)</option>
-            <option
-              value="webm"
-              disabled={
-                !globalThis.MediaRecorder?.isTypeSupported("video/webm")
-              }
-            >
-              WebM (VP8 + Opus)
-            </option>
-          </select>
-        </label>
+        <a className="brand" href="/" aria-label="Shomshar Animation Studio home">
+          <img
+            className="brand-logo"
+            src={LOGO_SRC}
+            alt={LOGO_ALT}
+            width="2172"
+            height="724"
+          />
+        </a>
         <button
           className="primary"
           disabled={!draftReady || exporting || !screens.some((s) => s.src)}
@@ -371,12 +455,62 @@ export default function ScreenStudio() {
       </header>
       <div className="screen-layout">
         <section className="screen-editor">
-          <div className="screen-intro"><div className="screen-draft-bar"><span role="status">{draftStatus}</span><button disabled={exporting} onClick={discardDraft}>Clear draft</button></div><span className="eyebrow">IMAGE TO REEL</span><h1>Your screens. Your timeline.</h1><p>Start with one screen and add up to 30 screens. Keep your reel within 30 seconds. Set their time ranges and choose how each enters and exits. Overlapping screens play together; the screen lower in the layer list appears on top.</p>              <button
-                className="primary"
-                disabled={!draftReady || exporting || screens.length >= 30}
-                onClick={()=>{setPlaying(false);setScreens(ss=>ss.length<30?[...ss,makeScreen(ss.length)]:ss)}}
+          <div className="screen-tabs" role="tablist" aria-label="Editor sections">
+            {["Screen", "Audio", "Settings", "Timeline"].map((tab, index, tabs) => (
+              <button
+                key={tab}
+                id={`screen-tab-${tab.toLowerCase()}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`screen-panel-${tab.toLowerCase()}`}
+                tabIndex={activeTab === tab ? 0 : -1}
+                onClick={() => setActiveTab(tab)}
+                onKeyDown={(event) => {
+                  const direction =
+                    event.key === "ArrowRight"
+                      ? 1
+                      : event.key === "ArrowLeft"
+                        ? -1
+                        : 0;
+                  if (!direction) return;
+                  event.preventDefault();
+                  const next = (index + direction + tabs.length) % tabs.length;
+                  setActiveTab(tabs[next]);
+                  event.currentTarget.parentElement
+                    ?.querySelectorAll('[role="tab"]')
+                    [next]?.focus();
+                }}
               >
-                Add screen ({screens.length}/30)
+                {tab}
+              </button>
+            ))}
+          </div>
+          <section
+            id="screen-panel-screen"
+            className="screen-tab-panel"
+            role="tabpanel"
+            aria-labelledby="screen-tab-screen"
+            tabIndex={0}
+            hidden={activeTab !== "Screen"}
+          >
+          <div className="screen-intro"><span className="eyebrow">IMAGE TO REEL</span><h1>Your screens. Your timeline.</h1><button
+                className="primary"
+                  disabled={!draftReady || exporting || screens.length >= maxScreens}
+                  onClick={() => {
+                    if (screens.length >= maxScreens) return;
+                    setPlaying(false);
+                    setScreens((current) => [
+                      ...current,
+                      makeScreen(
+                        current.length,
+                        maxReelDuration,
+                        nextScreenId.current++,
+                      ),
+                    ]);
+                  }}
+                >
+                  Add screen ({screens.length}/{maxScreens})
               </button>{" "}
               <label className="screen-upload">
                 Upload multiple screens
@@ -386,24 +520,37 @@ export default function ScreenStudio() {
                   multiple
                   disabled={!draftReady || exporting}
                   onChange={(e) => {
-                    const files=Array.from(e.target.files).slice(0,30);setPlaying(false);setScreens(ss=>{const next=[...ss];while(next.length<files.length)next.push(makeScreen(next.length));return next});files.forEach((file,i)=>upload(file,i+1));
-                  e.target.value = "";
+                    const selectedFiles = Array.from(e.target.files);
+                    const files = selectedFiles.slice(0, maxScreens);
+                    setPlaying(false);
+                    const next = [...screens];
+                    while (next.length < files.length) {
+                      next.push(
+                        makeScreen(
+                          next.length,
+                          maxReelDuration,
+                          nextScreenId.current++,
+                        ),
+                      );
+                    }
+                    const targetIds = next
+                      .slice(0, files.length)
+                      .map((screen) => screen.id);
+                    setScreens(next);
+                    files.forEach((file, index) =>
+                      upload(file, targetIds[index]),
+                    );
+                    if (selectedFiles.length > files.length) {
+                      notify(
+                        `Only the first ${maxScreens} files were selected to match the screen limit.`,
+                        "info",
+                      );
+                    }
+                    e.target.value = "";
                   }}
                 />
               </label>
-              <div className="screen-timing-actions">
-                <button
-                  disabled={!draftReady || exporting || screens.length > 10}
-                  onClick={resetTiming}
-                >
-                  Reset timing by order · 3s each
-                </button>
-                <span>
-                  {screens.length > 10
-                    ? "3 seconds per screen requires 10 or fewer screens within the 30-second limit."
-                    : "Set screens to 0–3s, 3–6s, 6–9s… in their current order."}
-                </span>
-              </div></div>
+              </div>
           <fieldset disabled={!draftReady || exporting}>
             <legend>Screen layers · drag the handle to reorder · times stay unchanged</legend>
             {screens.map((s, position) => (
@@ -478,109 +625,286 @@ export default function ScreenStudio() {
                   />
                 </label>
                 <div className="screen-fields">
-                  <strong>
-                    Screen {s.id} <small>{s.name || "No image uploaded"}</small>
-                  </strong>
-                <div className="screen-options">
-                  <label>
-                    Start (s)
-                    <input
-                      aria-label={`Screen ${s.id} start`}
-                      type="number"
-                      min="0"
-                      max={s.end - 0.1}
-                      step=".1"
-                      value={s.start}
-                      onChange={(e) => {
-                        const n = +e.target.value;
-                        if (n >= 0 && n < s.end)
-                          update(s.id, { start: n });
-                      }}
-                    />
-                  </label>
-                  <label>
-                    End (s)
-                    <input
-                      aria-label={`Screen ${s.id} end`}
-                      type="number"
-                      min={s.start + 0.1}
-                      max="30"
-                      step=".1"
-                      value={s.end}
-                      onChange={(e) => {
-                        const n = +e.target.value;
-                        if (n > s.start && n <= 30)
-                          update(s.id, { end: n });
-                      }}
-                    />
-                  </label>
-                  {["entry", "exit"].map((key) => (
-                    <label key={key}>
-                      {key === "entry" ? "Entry" : "Exit"}
-                      <select
-                        value={s[key]}
-                        onChange={(e) =>
-                          update(s.id, { [key]: e.target.value })
-                        }
-                      >
-                        {styles.map((v) => (
-                          <option key={v}>{v}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                  <label>
-                    Motion (s)
-                    <input
-                      type="number"
-                      min="0"
-                      max="5"
-                      step=".1"
-                      value={s.transition}
-                      onChange={(e) => {
-                        const n = +e.target.value;
-                        if (n >= 0 && n <= 5)
-                          update(s.id, { transition: n });
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Image fit
-                    <select
-                      value={s.fit}
-                      onChange={(e) =>
-                        update(s.id, { fit: e.target.value })
+                  <div className="screen-fields-header">
+                    <strong>
+                      Screen {s.id} <small>{s.name || "No image uploaded"}</small>
+                    </strong>
+                    <button
+                      type="button"
+                      className="screen-fields-toggle"
+                      aria-label={`Show or hide settings for screen ${s.id}`}
+                      aria-expanded={Boolean(expandedScreenFields[s.id])}
+                      aria-controls={`screen-extra-fields-${s.id}`}
+                      onClick={() =>
+                        setExpandedScreenFields((current) => ({
+                          ...current,
+                          [s.id]: !current[s.id],
+                        }))
                       }
                     >
-                      <option value="cover">Full screen (crop)</option>
-                      <option value="contain">Fit whole image</option>
-                      <option value="crop">Custom crop</option>
-                    </select>
-                  </label>
-                  {s.src && (
-                    <button
-                      className="remove-screen-image"
-                      onClick={() => {
-                        images.current.delete(s.id);
-
-                        update(s.id, {
-                          src: null,
-                          file: null,
-                          name: null,
-                        });
+                      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <path d="m6 3 5 5-5 5" />
+                      </svg>
+                    </button>
+                  </div>
+                  <fieldset className="screen-control-group screen-time-group">
+                    <legend>Timeline</legend>
+                    <div className="screen-time-values">
+                      <span>
+                        Start <output>{s.start.toFixed(1)}s</output>
+                      </span>
+                      <span>
+                        End <output>{s.end.toFixed(1)}s</output>
+                      </span>
+                    </div>
+                    <div
+                      className="screen-dual-range"
+                      style={{
+                        "--range-start": `${(s.start / maxReelDuration) * 100}%`,
+                        "--range-end": `${(s.end / maxReelDuration) * 100}%`,
                       }}
                     >
-                      Remove
-                    </button>
-                  )}
-                </div>
+                      <input
+                        aria-label={`Screen ${s.id} start`}
+                        type="range"
+                        min="0"
+                        max={Math.max(0, +(s.end - 0.1).toFixed(1))}
+                        step=".1"
+                        value={s.start}
+                        aria-valuetext={`${s.start.toFixed(1)} seconds`}
+                        onChange={(event) => {
+                          const start = Number(event.target.value);
+                          if (start >= 0 && start < s.end) {
+                            update(s.id, { start });
+                          }
+                        }}
+                      />
+                      <input
+                        aria-label={`Screen ${s.id} end`}
+                        type="range"
+                        min={+(s.start + 0.1).toFixed(1)}
+                        max={maxReelDuration}
+                        step=".1"
+                        value={s.end}
+                        aria-valuetext={`${s.end.toFixed(1)} seconds`}
+                        onChange={(event) => {
+                          const end = Number(event.target.value);
+                          if (end > s.start && end <= maxReelDuration) {
+                            update(s.id, { end });
+                          }
+                        }}
+                      />
+                    </div>
+                  </fieldset>
+                  <div
+                    className="screen-extra-fields"
+                    id={`screen-extra-fields-${s.id}`}
+                    hidden={!expandedScreenFields[s.id]}
+                  >
+                    <fieldset className="screen-control-group screen-animation-group">
+                      <legend>Animation</legend>
+                      <div className="screen-options">
+                        {["entry", "exit"].map((key) => (
+                          <label key={key}>
+                            {key === "entry" ? "Entry" : "Exit"}
+                            <select
+                              value={s[key]}
+                              onChange={(e) =>
+                                update(s.id, { [key]: e.target.value })
+                              }
+                            >
+                              {styles.map((v) => (
+                                <option key={v}>{v}</option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                        <label className="screen-range-field">
+                          <span>
+                            Motion (s)
+                            <output>{s.transition.toFixed(1)}s</output>
+                          </span>
+                          <input
+                            aria-label={`Screen ${s.id} motion`}
+                            type="range"
+                            min="0"
+                            max="5"
+                            step=".1"
+                            value={s.transition}
+                            aria-valuetext={`${s.transition.toFixed(1)} seconds`}
+                            onChange={(event) => {
+                              const transition = Number(event.target.value);
+                              if (transition >= 0 && transition <= 5) {
+                                update(s.id, { transition });
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </fieldset>
+                    <fieldset className="screen-control-group screen-fit-group">
+                      <legend>Image fit</legend>
+                      <div className="screen-fit-options">
+                        {[
+                          { value: "cover", label: "Fill frame, crop edges" },
+                          { value: "contain", label: "Fit whole image" },
+                          { value: "crop", label: "Custom crop" },
+                        ].map((option) => (
+                          <label
+                            className="screen-fit-option"
+                            key={option.value}
+                            title={option.label}
+                          >
+                            <input
+                              type="radio"
+                              name={`screen-${s.id}-fit`}
+                              value={option.value}
+                              aria-label={`Screen ${s.id} image fit: ${option.label}`}
+                              checked={s.fit === option.value}
+                              onChange={() => update(s.id, { fit: option.value })}
+                            />
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              focusable="false"
+                            >
+                              {option.value === "cover" && (
+                                <>
+                                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                                  <path d="M3 9h18M8 4v5m8-5v5M7 16h10" />
+                                </>
+                              )}
+                              {option.value === "contain" && (
+                                <>
+                                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                                  <rect x="8" y="6" width="8" height="12" rx="1" />
+                                </>
+                              )}
+                              {option.value === "crop" && (
+                                <path d="M8 4v12a2 2 0 0 0 2 2h10M4 8h12a2 2 0 0 1 2 2v10M8 8l8 8" />
+                              )}
+                            </svg>
+                            <span className="screen-visually-hidden">{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {s.fit === "contain" && (
+                        <div className="screen-fit-background">
+                          <span className="screen-fit-background-label">
+                            Fill empty space with
+                          </span>
+                          <div className="screen-fit-background-modes">
+                            {[
+                              { value: "blur", label: "Blurred image" },
+                              { value: "color", label: "Solid color" },
+                            ].map((mode) => (
+                              <label key={mode.value}>
+                                <input
+                                  type="radio"
+                                  name={`screen-${s.id}-background`}
+                                  value={mode.value}
+                                  checked={
+                                    (s.fitBackground?.mode || "blur") ===
+                                    mode.value
+                                  }
+                                  onChange={() =>
+                                    update(s.id, {
+                                      fitBackground: {
+                                        ...s.fitBackground,
+                                        mode: mode.value,
+                                      },
+                                    })
+                                  }
+                                />
+                                {mode.label}
+                              </label>
+                            ))}
+                          </div>
+                          {s.fitBackground?.mode === "color" ? (
+                            <label className="screen-fit-background-detail">
+                              Background color
+                              <input
+                                type="color"
+                                aria-label={`Screen ${s.id} background color`}
+                                value={s.fitBackground.color || "#292630"}
+                                onChange={(event) =>
+                                  update(s.id, {
+                                    fitBackground: {
+                                      ...s.fitBackground,
+                                      mode: "color",
+                                      color: event.target.value,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : (
+                            <label className="screen-fit-background-detail">
+                              Blur strength
+                              <input
+                                type="range"
+                                min="4"
+                                max="32"
+                                step="1"
+                                aria-label={`Screen ${s.id} background blur`}
+                                aria-valuetext={`${s.fitBackground?.blur ?? 18} pixels`}
+                                value={s.fitBackground?.blur ?? 18}
+                                onChange={(event) =>
+                                  update(s.id, {
+                                    fitBackground: {
+                                      ...s.fitBackground,
+                                      mode: "blur",
+                                      blur: Number(event.target.value),
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </fieldset>
+                    {s.src && (
+                      <button
+                        className="remove-screen-image"
+                        onClick={() => {
+                          images.current.delete(s.id);
 
+                          update(s.id, {
+                            src: null,
+                            file: null,
+                            name: null,
+                          });
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                    {screens.length > 1 && (
+                      <button
+                        type="button"
+                        className="remove-screen"
+                        aria-label={`Remove screen ${s.id}`}
+                        onClick={() => removeScreen(s.id)}
+                      >
+                        Remove screen
+                      </button>
+                    )}
+                  </div>
                 </div>
               </article>
             ))}
           </fieldset>
-
-              <section className="screen-audio">
+          </section>
+          <section
+            id="screen-panel-audio"
+            className="screen-tab-panel"
+            role="tabpanel"
+            aria-labelledby="screen-tab-audio"
+            tabIndex={0}
+            hidden={activeTab !== "Audio"}
+          >
+            <section className="screen-audio">
                 <h2>Audio layer</h2>
                 <label className="screen-upload">
                   {audio?"Replace audio":"Upload audio"}
@@ -604,15 +928,20 @@ export default function ScreenStudio() {
                       <input
                         type="number"
                         min="0"
-                        max="30"
+                        max={maxReelDuration}
                         step=".1"
                         disabled={!draftReady || exporting}
                         value={audioStart}
-                        onChange={(e) =>
-                          setAudioStart(
-                            Math.max(0, Math.min(30, +e.target.value)),
-                          )
-                        }
+                        onChange={(e) => {
+                          const value = Number(e.target.value);
+                          if (
+                            Number.isFinite(value) &&
+                            value >= 0 &&
+                            value <= maxReelDuration
+                          ) {
+                            setAudioStart(value);
+                          }
+                        }}
                       />
                     </label>
                     <label>
@@ -638,48 +967,270 @@ export default function ScreenStudio() {
                     </button>
                   </>
                 )}
+            </section>
+          </section>
+          <section
+            id="screen-panel-settings"
+            className="screen-tab-panel screen-settings"
+            role="tabpanel"
+            aria-labelledby="screen-tab-settings"
+            tabIndex={0}
+            hidden={activeTab !== "Settings"}
+          >
+              <h2>Settings</h2>
+              <section className="screen-settings-group" aria-labelledby="draft-settings-heading">
+                <h3 id="draft-settings-heading">Draft</h3>
+                <p role="status">{draftStatus}</p>
+                <button
+                  disabled={!draftReady || exporting}
+                  onClick={discardDraft}
+                >
+                  Clear draft
+                </button>
               </section>
+              <section className="screen-settings-group" aria-labelledby="output-settings-heading">
+                <h3 id="output-settings-heading">Video output</h3>
+                <label className="screen-setting-field">
+                  Video type
+                  <select
+                    aria-label="Export video type"
+                    disabled={!draftReady || exporting}
+                    value={format}
+                    onChange={(event) => setFormat(event.target.value)}
+                  >
+                    <option value="mp4">MP4 (H.264 + AAC)</option>
+                    <option
+                      value="webm"
+                      disabled={!globalThis.MediaRecorder?.isTypeSupported("video/webm")}
+                    >
+                      WebM (VP8 + Opus)
+                    </option>
+                  </select>
+                </label>
+                <label className="screen-setting-toggle">
+                  <input
+                    type="checkbox"
+                    disabled={!draftReady || exporting}
+                    checked={reducedMotion}
+                    onChange={(event) => setReducedMotion(event.target.checked)}
+                  />
+                  Reduce motion in preview and export
+                </label>
+              </section>
+              <section className="screen-settings-group" aria-labelledby="timing-settings-heading">
+                <h3 id="timing-settings-heading">Screen timing</h3>
+                <button
+                  disabled={!draftReady || exporting}
+                  onClick={resetTiming}
+                >
+                  Reset timing by order
+                </button>
+                <p>
+                  Screens are placed in order, up to 3 seconds each, within the configured reel duration.
+                </p>
+              </section>
+              <section
+                className="screen-settings-group"
+                aria-labelledby="limits-settings-heading"
+              >
+                <h3 id="limits-settings-heading">Project limits</h3>
+                <label className="screen-setting-field">
+                  Maximum screens
+                  <input
+                    aria-label="Maximum screens"
+                    type="number"
+                    min={screens.length}
+                    step="1"
+                    value={maxScreensInput}
+                    disabled={!draftReady || exporting}
+                    onChange={(event) => {
+                      const input = event.target.value;
+                      setMaxScreensInput(input);
+                      const value = Number(input);
+                      const minimum = Number(event.currentTarget.min);
+                      if (
+                        input !== "" &&
+                        Number.isInteger(value) &&
+                        value >= minimum
+                      ) {
+                        maxScreensValue.current = value;
+                        setMaxScreens(value);
+                      }
+                    }}
+                    onBlur={() =>
+                      setMaxScreensInput(String(maxScreensValue.current))
+                    }
+                  />
+                </label>
+                <p>
+                  Current screens: {screens.length}. Remove screens before lowering this limit.
+                </p>
+                <label className="screen-setting-field">
+                  Maximum reel duration (seconds)
+                  <input
+                    aria-label="Maximum reel duration (seconds)"
+                    type="number"
+                    min={requiredDuration}
+                    step="0.1"
+                    value={maxReelDurationInput}
+                    disabled={!draftReady || exporting}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setMaxReelDurationInput(value);
+                      const durationLimit = Number(value);
+                      const minimum = Number(event.currentTarget.min);
+                      if (
+                        value !== "" &&
+                        Number.isFinite(durationLimit) &&
+                        durationLimit >= minimum
+                      ) {
+                        maxReelDurationValue.current = durationLimit;
+                        setMaxReelDuration(durationLimit);
+                        setTime((current) => Math.min(current, durationLimit));
+                      }
+                    }}
+                    onBlur={() =>
+                      setMaxReelDurationInput(
+                        String(maxReelDurationValue.current),
+                      )
+                    }
+                  />
+                </label>
+                <p>
+                  Shorten screen timings or move the audio start before lowering the limit.
+                  Current minimum: {requiredDuration.toFixed(1)}s.
+                </p>
+              </section>
+          </section>
+          <section
+            id="screen-panel-timeline"
+            className="screen-tab-panel screen-timeline"
+            role="tabpanel"
+            aria-labelledby="screen-tab-timeline"
+            tabIndex={0}
+            hidden={activeTab !== "Timeline"}
+          >
+            <div className="screen-timeline-heading">
+              <div>
+                <h2>Timeline</h2>
+                <p>One row per screen · select a clip to seek the preview.</p>
+              </div>
+              <span>{time.toFixed(1)} / {maxReelDuration.toFixed(1)}s</span>
+            </div>
+            <input
+              aria-label="Reel playhead"
+              type="range"
+              min="0"
+              max={maxReelDuration}
+              step=".01"
+              value={time}
+              disabled={!draftReady || exporting}
+              onChange={(event) => {
+                setPlaying(false);
+                setTime(+event.target.value);
+              }}
+            />
+            <div className="screen-tracks">
+              {screens.map((screen) => (
+                <div key={screen.id}>
+                  <span>{screen.id}</span>
+                  <div className="screen-lane">
+                    <button
+                      disabled={!screen.src || exporting}
+                      aria-label={`Seek screen ${screen.id}`}
+                      onClick={() => {
+                        setPlaying(false);
+                        setTime(screen.start);
+                      }}
+                      style={{
+                        left: `${Math.min((screen.start / maxReelDuration) * 100, 100)}%`,
+                        width: `${(Math.max(
+                          0,
+                          Math.min(screen.end, maxReelDuration) - screen.start,
+                        ) / maxReelDuration) * 100}%`,
+                      }}
+                    >
+                      {screen.src ? `${screen.start}–${screen.end}s` : ""}
+                    </button>
+                    <i
+                      style={{
+                        left: `${(time / maxReelDuration) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div>
+                <span>Audio</span>
+                <div className="screen-lane audio-lane">
+                  {audio && audioStart < maxReelDuration && (
+                    <b
+                      style={{
+                        left: `${(audioStart / maxReelDuration) * 100}%`,
+                        width: `${(Math.min(audio.duration, maxReelDuration - audioStart) / maxReelDuration) * 100}%`,
+                      }}
+                    >
+                      Audio
+                    </b>
+                  )}
+                  <i
+                    style={{
+                      left: `${(time / maxReelDuration) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
         <aside className="screen-preview">
           <h2>Reel preview <span>9:16</span></h2>
           <canvas ref={canvas} width="360" height="640" aria-label="Screen reel preview"/>
-          <div className="screen-controls">
+          <div className="screen-controls" role="group" aria-label="Reel preview controls">
             <button
+              type="button"
+              className="screen-transport-button"
+              aria-label="Restart reel preview"
+              title="Restart"
               disabled={!draftReady || exporting}
               onClick={() => {
                 setPlaying(false);
                 setTime(0);
               }}
             >
-              Restart
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 11a9 9 0 1 1 2.64 6.36L3 15.5" />
+                <path d="M3 4v5h5" />
+              </svg>
             </button>
             <button
+              type="button"
               className="primary"
+              aria-label={playing ? "Pause reel preview" : "Play reel preview"}
+              title={playing ? "Pause" : "Play"}
               disabled={!draftReady || exporting || !screens.some((s) => s.src)}
-              onClick={()=>{if(time>=duration)setTime(0);setPlaying(!playing)}}
+              onClick={() => {
+                if (!playing) {
+                  if (time >= duration) setTime(0);
+                  setActiveTab("Timeline");
+                }
+                setPlaying(!playing);
+              }}
             >
-              {playing?"Pause":"Play"}
+              {playing ? (
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M7 5h4v14H7zM15 5h4v14h-4z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m8 5 12 7-12 7z" />
+                </svg>
+              )}
             </button>
-            <span>
+            <output aria-label="Preview time">
               {time.toFixed(1)} / {duration.toFixed(1)}s
-            </span>
+            </output>
           </div>
-          <input
-            aria-label="Reel playhead"
-            type="range"
-            min="0"
-            max={duration}
-            step=".01"
-            value={time}
-            disabled={!draftReady || exporting}
-            onChange={(e) => {
-              setPlaying(false);
-              setTime(+e.target.value);
-            }}
-          />
-          <p>Timeline · one row per screen</p>
-          <div className="screen-tracks">{screens.map(s=><div key={s.id}><span>{s.id}</span><div className="screen-lane"><button disabled={!s.src||exporting} aria-label={`Seek screen ${s.id}`} onClick={()=>{setPlaying(false);setTime(s.start)}} style={{left:`${Math.min(s.start/duration*100,100)}%`,width:`${Math.max(0,Math.min(s.end,duration)-s.start)/duration*100}%`}}>{s.src?`${s.start}–${s.end}s`:''}</button><i style={{left:`${time/duration*100}%`}}/></div></div>)}<div><span>Audio</span><div className="screen-lane audio-lane">{audio&&audioStart<duration&&<b style={{left:`${audioStart/duration*100}%`,width:`${Math.min(audio.duration,duration-audioStart)/duration*100}%`}}>Audio</b>}</div></div></div>
-
             <p>
               1080 × 1920 · 9:16 · 30 FPS
               <br />
@@ -708,7 +1259,22 @@ export default function ScreenStudio() {
 
         </aside>
       </div>
-      <p className="screen-notice" role="status">{notice}</p>
+      {notice && (
+        <div
+          className={`screen-notice screen-notice-${notice.type}`}
+          role={notice.type === "error" ? "alert" : "status"}
+        >
+          <strong>{notice.type === "error" ? "Error" : notice.type === "success" ? "Success" : "Notice"}</strong>
+          <span>{notice.message}</span>
+          <button
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => setNotice(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {audio&&<audio ref={sound} src={audio.src}/>}
     </div>
   );
