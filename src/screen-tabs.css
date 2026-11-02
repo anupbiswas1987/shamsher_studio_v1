@@ -64,6 +64,45 @@
   color: #bbb2ca;
 }
 
+.screen-setting-range {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 4px;
+  color: #bbb2ca;
+}
+
+.screen-setting-range > span {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.screen-setting-range output {
+  color: #e6e5ed;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-studio .screen-setting-range input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  accent-color: #b99add;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.screen-studio .screen-setting-range input[type="range"]:focus-visible {
+  outline: 2px solid #d7baf4;
+  outline-offset: 2px;
+}
+
+.screen-setting-animation-defaults {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
 .screen-studio .screen-setting-field select,
 .screen-studio .screen-setting-field input {
   min-width: 220px;
@@ -469,17 +508,15 @@
 }
 
 .screen-studio .screen-controls {
-  position: fixed;
-  right: max(32px, calc((100vw - 1500px) / 2 + 32px));
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 20;
+  position: static;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: min(330px, calc(100vw - 32px));
-  margin: 0;
-  padding: 8px;
+  justify-content: flex-start;
+  gap: 4px;
+  width: min(100%, 247.5px);
+  box-sizing: border-box;
+  margin: 8px auto 0;
+  padding: 6px;
   background: rgb(26 27 33 / 96%);
   border: 1px solid #49414f;
   border-radius: 12px;
@@ -487,19 +524,25 @@
   backdrop-filter: blur(12px);
 }
 
+.screen-studio .screen-preview {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+}
+
 .screen-studio .screen-transport-button {
   display: grid;
   place-items: center;
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
   padding: 0;
 }
 
 .screen-studio .screen-controls svg {
-  width: 21px;
-  height: 21px;
+  width: 10.5px;
+  height: 10.5px;
 }
 
 .screen-studio .screen-transport-button svg {
@@ -522,19 +565,17 @@
   white-space: nowrap;
 }
 
-.screen-studio {
-  padding-bottom: 88px;
-}
-
-@media (max-width: 1000px) {
-  .screen-studio .screen-controls {
-    right: 16px;
-  }
-}
-
 @media (max-width: 740px) {
+  .screen-studio .screen-preview {
+    position: static;
+  }
+
+  .screen-studio .screen-controls {
+    max-width: 180px;
+  }
+
   .screen-studio .screen-notice {
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    bottom: max(16px, env(safe-area-inset-bottom));
   }
 }
 

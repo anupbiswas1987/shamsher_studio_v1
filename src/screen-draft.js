@@ -1,3 +1,9 @@
+import {
+  DEFAULT_MOTION_DURATION,
+  DEFAULT_OVERLAY_DURATION,
+  DEFAULT_SCREEN_DURATION,
+} from "./screen-timing.js";
+
 const DATABASE = "shomshar-screen-drafts";
 function open() {
   return new Promise((resolve, reject) => {
@@ -43,8 +49,14 @@ export function draftSnapshot({
   volume,
   format,
   reducedMotion,
+  autoOverlap,
   maxScreens,
   maxReelDuration,
+  maxScreenDuration = DEFAULT_SCREEN_DURATION,
+  maxMotionDuration = DEFAULT_MOTION_DURATION,
+  maxOverlayDuration = DEFAULT_OVERLAY_DURATION,
+  defaultEntry = "None",
+  defaultExit = "None",
 }) {
   return {
     version: 2,
@@ -54,7 +66,13 @@ export function draftSnapshot({
     volume,
     format,
     reducedMotion,
+    autoOverlap,
     maxScreens,
     maxReelDuration,
+    maxScreenDuration,
+    maxMotionDuration,
+    maxOverlayDuration,
+    defaultEntry,
+    defaultExit,
   };
 }

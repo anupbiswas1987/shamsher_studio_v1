@@ -4,7 +4,15 @@ import { LOGO_ALT, LOGO_SRC } from "./branding";
 import "./screen-studio.css";
 import "./screen-notice.css";
 import "./screen-tabs.css";
-import { resetScreenTiming } from "./screen-timing";
+import {
+  DEFAULT_MOTION_DURATION,
+  DEFAULT_OVERLAY_DURATION,
+  DEFAULT_SCREEN_DURATION,
+  defaultScreenDuration,
+  maxScreenMotionDuration,
+  resetScreenTiming,
+  screenMotionDuration,
+} from "./screen-timing";
 import {
   createAnimation,
   normalizeAnimation,
@@ -19,24 +27,36 @@ import {
 import { SCREEN_EXPORT } from "./screen-export";
 const DEFAULT_MAX_SCREENS = 30;
 const DEFAULT_MAX_DURATION = 30;
+const clampDraftSetting = (value, fallback, min, max) =>
+  Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 const requiredDraftDuration = (screens, audioStart = 0) =>
   Math.max(
     0.1,
     Number.isFinite(audioStart) ? audioStart : 0,
     ...screens.map((screen) => screen.end || 0),
   );
-const makeScreen = (i, maxDuration = DEFAULT_MAX_DURATION, id = i + 1) => {
-  const start = Math.min(i * 3, Math.max(0, maxDuration - 0.1));
+const makeScreen = (
+  i,
+  maxDuration = DEFAULT_MAX_DURATION,
+  id = i + 1,
+  screenDuration = DEFAULT_SCREEN_DURATION,
+  entry = "None",
+  exit = "None",
+) => {
+  const start = Math.min(
+    i * screenDuration,
+    Math.max(0, maxDuration - 0.1),
+  );
   return {
-  id,
-  start,
-  end: Math.min(start + 3, maxDuration),
-  entry: "None",
-  exit: "None",
-  transition: 0.7,
-  fit: "cover",
-  fitBackground: { mode: "blur", color: "#292630", blur: 18 },
-  animation: createAnimation("static"),
+    id,
+    start,
+    end: Math.min(start + screenDuration, maxDuration),
+    entry,
+    exit,
+    transition: 0.7,
+    fit: "cover",
+    fitBackground: { mode: "blur", color: "#292630", blur: 18 },
+    animation: createAnimation("static"),
   };
 };
 const styles = ["None", "Fade", "Slide left", "Slide right", "Slide up", "Slide down", "Zoom"];
@@ -53,6 +73,12 @@ export default function ScreenStudio() {
     [audio,setAudio]=useState(null),
     [audioStart,setAudioStart]=useState(0),
     [volume,setVolume]=useState(1),
+    [autoOverlap,setAutoOverlap]=useState(true),
+    [maxScreenDuration,setMaxScreenDuration]=useState(DEFAULT_SCREEN_DURATION),
+    [maxMotionDuration,setMaxMotionDuration]=useState(DEFAULT_MOTION_DURATION),
+    [maxOverlayDuration,setMaxOverlayDuration]=useState(DEFAULT_OVERLAY_DURATION),
+    [defaultEntry,setDefaultEntry]=useState("None"),
+    [defaultExit,setDefaultExit]=useState("None"),
     [notice, setNotice] = useState(null),
     [exporting, setExporting] = useState(false),
     [exportStatus, setExportStatus] = useState(""),
@@ -69,6 +95,11 @@ export default function ScreenStudio() {
   const nextScreenId = useRef(2);
   const maxScreensValue = useRef(DEFAULT_MAX_SCREENS);
   const maxReelDurationValue = useRef(DEFAULT_MAX_DURATION);
+  const previousDefaultScreenDuration = useRef(DEFAULT_SCREEN_DURATION);
+  const calculatedDefaultScreenDuration = defaultScreenDuration(
+    maxReelDuration,
+    maxScreens,
+  );
   const canvas=useRef(),images=useRef(new Map()),sound=useRef(),live=useRef(),urls=useRef(new Set());
   const duration=Math.max(1,...screens.filter(s=>s.src).map(s=>s.end));
   const requiredDuration=Math.max(0.1,audioStart,...screens.map(s=>s.end||0));
@@ -81,15 +112,32 @@ export default function ScreenStudio() {
     const timer = window.setTimeout(() => setNotice(null), 30000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+  useEffect(() => {
+    if (
+      Math.abs(maxScreenDuration - previousDefaultScreenDuration.current) <
+      1e-8
+    ) {
+      setMaxScreenDuration(calculatedDefaultScreenDuration);
+    }
+    previousDefaultScreenDuration.current = calculatedDefaultScreenDuration;
+  }, [calculatedDefaultScreenDuration, maxScreenDuration]);
   function resetTiming() {
     if (!draftReady || exporting) return;
     try {
-      const next = resetScreenTiming(screens, maxReelDuration);
+      const next = resetScreenTiming(screens, maxReelDuration, autoOverlap, {
+        maxScreenDuration,
+        maxMotionDuration,
+        maxOverlayDuration,
+        defaultEntry,
+        defaultExit,
+      });
       setPlaying(false);
       setTime(0);
       setScreens(next);
       notify(
-        `Timing reset in screen order within the ${maxReelDuration}s reel limit.`,
+        autoOverlap
+          ? `Timing and animation types reset within the ${maxReelDuration}s reel limit. Screens are capped at ${maxScreenDuration.toFixed(1)}s each with up to ${maxOverlayDuration.toFixed(1)}s overlap.`
+          : `Timing and animation types reset without overlap within the ${maxReelDuration}s reel limit. Screens are capped at ${maxScreenDuration.toFixed(1)}s each.`,
         "success",
       );
     } catch (e) {
@@ -204,6 +252,39 @@ export default function ScreenStudio() {
           setMaxReelDurationInput(String(restoredMaxDuration));
 
           if(typeof draft.reducedMotion==='boolean')setReducedMotion(draft.reducedMotion);
+          if(typeof draft.autoOverlap==='boolean')setAutoOverlap(draft.autoOverlap);
+          setMaxScreenDuration(
+            clampDraftSetting(
+              draft.maxScreenDuration,
+              DEFAULT_SCREEN_DURATION,
+              0.1,
+              10,
+            ),
+          );
+          const restoredMaxMotionDuration = clampDraftSetting(
+            draft.maxMotionDuration,
+            DEFAULT_MOTION_DURATION,
+            0,
+            5,
+          );
+          setMaxMotionDuration(restoredMaxMotionDuration);
+          setMaxOverlayDuration(
+            clampDraftSetting(
+              draft.maxOverlayDuration,
+              Math.min(
+                DEFAULT_OVERLAY_DURATION,
+                restoredMaxMotionDuration,
+              ),
+              0,
+              restoredMaxMotionDuration,
+            ),
+          );
+          setDefaultEntry(
+            styles.includes(draft.defaultEntry) ? draft.defaultEntry : "None",
+          );
+          setDefaultExit(
+            styles.includes(draft.defaultExit) ? draft.defaultExit : "None",
+          );
           if(draft.audio?.file){const src=URL.createObjectURL(draft.audio.file);urls.current.add(src);setAudio({...draft.audio,src})}
           setAudioStart(draft.audioStart??0);setVolume(draft.volume??1);setFormat(draft.format||'mp4');
           notify("Your saved reel draft has been restored.", "success");
@@ -236,8 +317,14 @@ export default function ScreenStudio() {
       volume,
       format,
       reducedMotion,
+      autoOverlap,
       maxScreens,
       maxReelDuration,
+      maxScreenDuration,
+      maxMotionDuration,
+      maxOverlayDuration,
+      defaultEntry,
+      defaultExit,
     });
     setDraftStatus("Saving draft…");
     saveQueue.current = saveQueue.current
@@ -253,7 +340,7 @@ export default function ScreenStudio() {
           setDraftStatus("Draft save failed — device storage may be full");
       },
     );
-  }, [draftReady,screens,audio,audioStart,volume,format,reducedMotion,maxScreens,maxReelDuration]);
+  }, [draftReady,screens,audio,audioStart,volume,format,reducedMotion,autoOverlap,maxScreens,maxReelDuration,maxScreenDuration,maxMotionDuration,maxOverlayDuration,defaultEntry,defaultExit]);
   async function discardDraft() {
     if (!window.confirm("Clear this draft and all uploaded screens and audio?"))
       return;
@@ -272,6 +359,13 @@ export default function ScreenStudio() {
       setReducedMotion(
         window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       );
+      setAutoOverlap(true);
+      setMaxScreenDuration(DEFAULT_SCREEN_DURATION);
+      previousDefaultScreenDuration.current = DEFAULT_SCREEN_DURATION;
+      setMaxMotionDuration(DEFAULT_MOTION_DURATION);
+      setMaxOverlayDuration(DEFAULT_OVERLAY_DURATION);
+      setDefaultEntry("None");
+      setDefaultExit("None");
       maxScreensValue.current = DEFAULT_MAX_SCREENS;
       setMaxScreens(DEFAULT_MAX_SCREENS);
       setMaxScreensInput(String(DEFAULT_MAX_SCREENS));
@@ -289,11 +383,21 @@ export default function ScreenStudio() {
   }
 
   function draw(ctx, t, list) {
-    return renderReelFrame(ctx,list,images.current,t,{reducedMotion});
+    const motionLimitedScreens = list.map((screen) => ({
+      ...screen,
+      transition: screenMotionDuration(screen, maxMotionDuration),
+    }));
+    return renderReelFrame(
+      ctx,
+      motionLimitedScreens,
+      images.current,
+      t,
+      { reducedMotion },
+    );
   }
   useEffect(() => {
     draw(canvas.current.getContext("2d"), time, screens);
-  }, [time, screens, playing, reducedMotion]);
+  }, [time, screens, playing, reducedMotion, maxMotionDuration]);
   useEffect(()=>{
     if(!playing)return;const start=performance.now()-time*1000;let raf;
     function tick(){const t=Math.min(live.current.duration,(performance.now()-start)/1000);setTime(Math.min(live.current.duration,Math.floor(t*30)/30));if(t>=live.current.duration)setPlaying(false);else raf=requestAnimationFrame(tick)}
@@ -337,7 +441,10 @@ export default function ScreenStudio() {
       if (format === "mp4") {
         const { renderScreenMp4 } = await import("./screen-offline-export");
         const blob = await renderScreenMp4({
-          screens,
+          screens: screens.map((screen) => ({
+            ...screen,
+            transition: screenMotionDuration(screen, maxMotionDuration),
+          })),
           images: images.current,
           duration,
           audio,
@@ -506,6 +613,9 @@ export default function ScreenStudio() {
                         current.length,
                         maxReelDuration,
                         nextScreenId.current++,
+                        maxScreenDuration,
+                        defaultEntry,
+                        defaultExit,
                       ),
                     ]);
                   }}
@@ -530,6 +640,9 @@ export default function ScreenStudio() {
                           next.length,
                           maxReelDuration,
                           nextScreenId.current++,
+                          maxScreenDuration,
+                          defaultEntry,
+                          defaultExit,
                         ),
                       );
                     }
@@ -668,30 +781,36 @@ export default function ScreenStudio() {
                         aria-label={`Screen ${s.id} start`}
                         type="range"
                         min="0"
-                        max={Math.max(0, +(s.end - 0.1).toFixed(1))}
+                        max={maxReelDuration}
+                        aria-valuemin="0"
+                        aria-valuemax={Math.max(0, +(s.end - 0.1).toFixed(1))}
                         step=".1"
                         value={s.start}
                         aria-valuetext={`${s.start.toFixed(1)} seconds`}
                         onChange={(event) => {
-                          const start = Number(event.target.value);
-                          if (start >= 0 && start < s.end) {
-                            update(s.id, { start });
-                          }
+                          const start = Math.min(
+                            Number(event.target.value),
+                            s.end - 0.1,
+                          );
+                          update(s.id, { start: +start.toFixed(1) });
                         }}
                       />
                       <input
                         aria-label={`Screen ${s.id} end`}
                         type="range"
-                        min={+(s.start + 0.1).toFixed(1)}
+                        min="0"
                         max={maxReelDuration}
+                        aria-valuemin={+(s.start + 0.1).toFixed(1)}
+                        aria-valuemax={maxReelDuration}
                         step=".1"
                         value={s.end}
                         aria-valuetext={`${s.end.toFixed(1)} seconds`}
                         onChange={(event) => {
-                          const end = Number(event.target.value);
-                          if (end > s.start && end <= maxReelDuration) {
-                            update(s.id, { end });
-                          }
+                          const end = Math.max(
+                            Number(event.target.value),
+                            s.start + 0.1,
+                          );
+                          update(s.id, { end: +end.toFixed(1) });
                         }}
                       />
                     </div>
@@ -722,19 +841,28 @@ export default function ScreenStudio() {
                         <label className="screen-range-field">
                           <span>
                             Motion (s)
-                            <output>{s.transition.toFixed(1)}s</output>
+                            <output>
+                              {screenMotionDuration(s, maxMotionDuration).toFixed(1)}s
+                            </output>
                           </span>
                           <input
                             aria-label={`Screen ${s.id} motion`}
                             type="range"
                             min="0"
-                            max="5"
+                            max={maxScreenMotionDuration(
+                              s.start,
+                              s.end,
+                              maxMotionDuration,
+                            )}
                             step=".1"
-                            value={s.transition}
-                            aria-valuetext={`${s.transition.toFixed(1)} seconds`}
+                            value={screenMotionDuration(s, maxMotionDuration)}
+                            aria-valuetext={`${screenMotionDuration(s, maxMotionDuration).toFixed(1)} seconds`}
                             onChange={(event) => {
                               const transition = Number(event.target.value);
-                              if (transition >= 0 && transition <= 5) {
+                              if (
+                                transition >= 0 &&
+                                transition <= maxMotionDuration
+                              ) {
                                 update(s.id, { transition });
                               }
                             }}
@@ -1019,6 +1147,106 @@ export default function ScreenStudio() {
               </section>
               <section className="screen-settings-group" aria-labelledby="timing-settings-heading">
                 <h3 id="timing-settings-heading">Screen timing</h3>
+                <label className="screen-setting-range">
+                  <span>
+                    Screens use up to{" "}
+                    <output>{maxScreenDuration.toFixed(1)}s</output> seconds each
+                  </span>
+                  <input
+                    aria-label="Screens use up to (seconds each)"
+                    type="range"
+                    min="0.1"
+                    max={Math.max(
+                      10,
+                      maxScreenDuration,
+                      calculatedDefaultScreenDuration,
+                    )}
+                    step="0.1"
+                    value={maxScreenDuration}
+                    disabled={!draftReady || exporting}
+                    onChange={(event) =>
+                      setMaxScreenDuration(Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="screen-setting-range">
+                  <span>
+                    Motion timing up to{" "}
+                    <output>{maxMotionDuration.toFixed(1)}s</output>
+                  </span>
+                  <input
+                    aria-label="Motion timing maximum (seconds)"
+                    type="range"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    value={maxMotionDuration}
+                    disabled={!draftReady || exporting}
+                    onChange={(event) => {
+                      const nextMotionDuration = Number(event.target.value);
+                      setMaxMotionDuration(nextMotionDuration);
+                      setMaxOverlayDuration((current) =>
+                        Math.min(current, nextMotionDuration),
+                      );
+                    }}
+                  />
+                </label>
+                <label className="screen-setting-range">
+                  <span>
+                    Screen overlaying time{" "}
+                    <output>{maxOverlayDuration.toFixed(1)}s</output>
+                  </span>
+                  <input
+                    aria-label="Screen overlaying time (seconds)"
+                    type="range"
+                    min="0"
+                    max={maxMotionDuration}
+                    step="0.1"
+                    value={maxOverlayDuration}
+                    disabled={!draftReady || exporting}
+                    onChange={(event) =>
+                      setMaxOverlayDuration(Number(event.target.value))
+                    }
+                  />
+                </label>
+                <div className="screen-setting-animation-defaults">
+                  <label className="screen-setting-field">
+                    Entry animation type
+                    <select
+                      aria-label="Default entry animation"
+                      disabled={!draftReady || exporting}
+                      value={defaultEntry}
+                      onChange={(event) => setDefaultEntry(event.target.value)}
+                    >
+                      {styles.map((style) => (
+                        <option key={style}>{style}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="screen-setting-field">
+                    Exit animation type
+                    <select
+                      aria-label="Default exit animation"
+                      disabled={!draftReady || exporting}
+                      value={defaultExit}
+                      onChange={(event) => setDefaultExit(event.target.value)}
+                    >
+                      {styles.map((style) => (
+                        <option key={style}>{style}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="screen-setting-toggle">
+                  <input
+                    aria-label="Overlap adjacent animated screens"
+                    type="checkbox"
+                    disabled={!draftReady || exporting}
+                    checked={autoOverlap}
+                    onChange={(event) => setAutoOverlap(event.target.checked)}
+                  />
+                  Overlap adjacent animated screens
+                </label>
                 <button
                   disabled={!draftReady || exporting}
                   onClick={resetTiming}
@@ -1026,7 +1254,7 @@ export default function ScreenStudio() {
                   Reset timing by order
                 </button>
                 <p>
-                  Screens are placed in order, up to 3 seconds each, within the configured reel duration.
+                  The default is Maximum reel duration ÷ Maximum screens. This adjusts with project limits until changed manually. Screen duration sets the maximum for new screens and Reset timing. Motion timing caps each screen’s Motion in preview and export.                   When overlap is enabled, Reset timing only overlaps adjacent screens with animated Exit and Entry types, capped by both Motion durations, half of each screen’s duration, and the overlay setting. Entry and Exit defaults apply to new screens and are applied to all screens when Reset timing by order is used.
                 </p>
               </section>
               <section
@@ -1205,7 +1433,7 @@ export default function ScreenStudio() {
             </button>
             <button
               type="button"
-              className="primary"
+              className="screen-transport-button primary"
               aria-label={playing ? "Pause reel preview" : "Play reel preview"}
               title={playing ? "Pause" : "Play"}
               disabled={!draftReady || exporting || !screens.some((s) => s.src)}
