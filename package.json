@@ -12,7 +12,7 @@
     "pretest": "npm run assets",
     "test:browser": "node scripts/check-asset-library.mjs",
     "test:cinematic": "node --test tests/cinematic.test.mjs",
-    "test:screens": "node scripts/check-screens.mjs",
+    "test:screens": "node scripts/check-screens.mjs && node scripts/check-screen-sort.mjs",
     "test:screens:mobile": "node scripts/check-screens.mjs --mobile"
   },
   "dependencies": {

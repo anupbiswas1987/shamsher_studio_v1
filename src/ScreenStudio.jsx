@@ -34,6 +34,9 @@ import PromptLibrary from "./PromptLibrary.jsx";
 import { audioPlaybackPosition, audioShouldLoop } from "./audio-loop.js";
 const DEFAULT_MAX_SCREENS = 30;
 const DEFAULT_MAX_DURATION = 30;
+const SCREEN_DRAG_TYPE = "application/x-screen-studio-screen";
+const isScreenDrag = (dataTransfer) =>
+  Array.from(dataTransfer.types).includes(SCREEN_DRAG_TYPE);
 const clampDraftSetting = (value, fallback, min, max) =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 const requiredDraftDuration = (screens, audioStart = 0) =>
@@ -1466,14 +1469,24 @@ export default function ScreenStudio() {
                   (dropScreen === s.id ? " screen-drop-target" : "")
                 }
                 key={s.id}
+                onDragStart={(e) => {
+                  if (!e.target.closest(".screen-drag-handle")) {
+                    e.preventDefault();
+                  }
+                }}
                 onDragOver={(e) => {
-                  if (draggedScreen === null || exporting) return;
+                  if (
+                    draggedScreen === null ||
+                    exporting ||
+                    !isScreenDrag(e.dataTransfer)
+                  ) return;
                   e.preventDefault();
                   e.dataTransfer.dropEffect = "move";
                   setDropScreen(s.id);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
+                  if (!isScreenDrag(e.dataTransfer)) return;
                   if (draggedScreen !== null) moveScreen(draggedScreen, s.id);
                 }}
               >
@@ -1487,7 +1500,7 @@ export default function ScreenStudio() {
                     onDragStart={(e) => {
                       setDraggedScreen(s.id);
                       e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", String(s.id));
+                      e.dataTransfer.setData(SCREEN_DRAG_TYPE, String(s.id));
                     }}
                     onDragEnd={() => {
                       setDraggedScreen(null);
@@ -1547,6 +1560,7 @@ export default function ScreenStudio() {
                       <button
                         type="button"
                         className="screen-select-preview"
+                        draggable={false}
                         aria-pressed={selectedScreenId === s.id}
                         onClick={() => selectScreen(s.id)}
                       >
