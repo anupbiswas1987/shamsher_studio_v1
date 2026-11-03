@@ -5,6 +5,8 @@ import {
   evaluateAnimation,
   evaluateTrack,
   evaluateClip,
+  FRAME_SHAPES,
+  frameShapePoints,
   imageGeometry,
   trimClip,
   sourceDuration,
@@ -74,6 +76,54 @@ test("custom frame fit scales and positions media without changing its aspect ra
   near(geometry.scale, 1.5);
   near(geometry.x, 198);
   near(geometry.y, 308);
+});
+test("custom frame rotation combines with clip animation rotation", () => {
+  const c = {
+    ...clip("static"),
+    fit: "custom",
+    customTransform: { scale: 1, x: 0, y: 0, rotation: 25 },
+  };
+  c.animation.preset = "custom";
+  c.animation.start.rotation = 10;
+  c.animation.keyframes.rotation = [{ time: 0, value: 10 }];
+  assert.equal(evaluateClip(c, { width: 360, height: 640 }, 1).rotation, 35);
+});
+test("custom quadrilateral frame shapes expose four points and clip the rendered media", () => {
+  for (const shape of FRAME_SHAPES) {
+    assert.equal(frameShapePoints(shape.value, 100, 80).length, 4);
+  }
+  assert.deepEqual(frameShapePoints("rectangle", 100, 80), [
+    { x: -50, y: -40 },
+    { x: 50, y: -40 },
+    { x: 50, y: 40 },
+    { x: -50, y: 40 },
+  ]);
+  const c = {
+    ...clip("static"),
+    fit: "custom",
+    frameShape: "diamond",
+    customTransform: { scale: 1, x: 0, y: 0 },
+  };
+  const calls = [];
+  const ctx = new Proxy(
+    {},
+    {
+      set: (_, key, value) => {
+        calls.push(["set", key, value]);
+        return true;
+      },
+      get:
+        (_, key) =>
+        (...args) =>
+          calls.push([key, ...args]),
+    },
+  );
+  renderReelFrame(ctx, [c], new Map([[1, { width: 360, height: 640 }]]), 1);
+  const clipIndex = calls.findIndex((call) => call[0] === "clip");
+  const imageIndex = calls.findIndex((call) => call[0] === "drawImage");
+  assert.ok(clipIndex > 0);
+  assert.ok(imageIndex > clipIndex);
+  assert.equal(calls.filter((call) => call[0] === "lineTo").length, 3);
 });
 test("multiple keys, segment easing, duplicate timestamps, opacity and rotation", () => {
   near(

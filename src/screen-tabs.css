@@ -1,6 +1,6 @@
 .screen-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 24px;
   padding: 5px;
@@ -35,6 +35,43 @@
 
 .screen-settings > h2 {
   margin: 0 0 20px;
+}
+
+.screen-frame-tools-panel > h2 {
+  margin: 0 0 8px;
+}
+
+.screen-frame-tools-description,
+.screen-frame-tools-empty {
+  max-width: 640px;
+  color: #b6aec4;
+  line-height: 1.5;
+}
+
+.screen-studio .screen-frame-tools-panel .screen-reel-tools {
+  max-width: 620px;
+  padding: 16px;
+  border: 1px solid #34313e;
+  border-radius: 10px;
+  background: #1a1b21;
+}
+
+.screen-studio .screen-frame-tools-panel .screen-reel-tool-buttons {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  max-width: 480px;
+}
+
+.screen-studio .screen-frame-tools-panel .screen-reel-tool {
+  justify-content: flex-start;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.screen-studio .screen-frame-tools-panel .screen-reel-transform-controls,
+.screen-studio .screen-frame-tools-panel .screen-reel-crop-controls,
+.screen-studio .screen-frame-tools-panel .screen-reel-shape-controls {
+  max-width: 480px;
 }
 
 .screen-settings-group {
@@ -793,6 +830,153 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   clip-path: inset(50%);
+}
+
+.screen-studio .screen-reel-tools {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.screen-studio .screen-reel-tool-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.screen-studio .screen-reel-tool,
+.screen-studio .screen-reel-shape-options button {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  color: #d7d0e0;
+  font-size: 11px;
+}
+
+.screen-studio .screen-reel-tool[aria-pressed="true"],
+.screen-studio .screen-reel-shape-options button[aria-pressed="true"] {
+  border-color: #b99add;
+  background: #39304b;
+  color: #f2eaff;
+}
+
+.screen-studio .screen-reel-tool svg,
+.screen-studio .screen-reel-shape-options svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.screen-studio .screen-reel-shape-options polygon {
+  fill: none;
+}
+
+.screen-studio .screen-reel-tool-help {
+  margin: 0;
+  font-size: 11px;
+}
+
+.screen-studio .screen-reel-transform-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.screen-studio .screen-reel-transform-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #d7d0e0;
+  font-size: 11px;
+}
+
+.screen-studio .screen-reel-transform-field span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.screen-studio .screen-reel-transform-field output {
+  color: #d7baf4;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-studio .screen-reel-transform-field input {
+  width: 100%;
+  min-height: 24px;
+  accent-color: #b99add;
+}
+
+.screen-studio .screen-reel-reset-transform {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.screen-studio .screen-reel-crop-controls,
+.screen-studio .screen-reel-shape-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #49414f;
+  border-radius: 6px;
+}
+
+.screen-studio .screen-reel-crop-controls legend,
+.screen-studio .screen-reel-shape-controls legend {
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+.screen-studio .screen-reel-crop-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #d7d0e0;
+  font-size: 11px;
+}
+
+.screen-studio .screen-reel-crop-field span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.screen-studio .screen-reel-crop-field output {
+  color: #d7baf4;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-studio .screen-reel-crop-field input {
+  width: 100%;
+  min-height: 24px;
+  accent-color: #b99add;
+}
+
+.screen-studio .screen-reel-reset-crop {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.screen-studio .screen-reel-shape-options {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.screen-studio .screen-reel-shape-options button {
+  flex-direction: column;
+  min-height: 54px;
+  gap: 2px;
 }
 
 .screen-studio .screen-sort-controls {

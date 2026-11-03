@@ -145,6 +145,28 @@ try{
   previewPointer(previewCanvas,'pointerdown',350,411);previewPointer(previewCanvas,'pointermove',365,426);previewPointer(previewCanvas,'pointerup',365,426);await saved();videoDraft=await loadScreenDraft();
   videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
   assert(videoScreen.customTransform.scale>1,'Dragging the selected frame corner should resize the video');
+  document.querySelector('#screen-tab-frame').click();
+  await until(()=>!document.querySelector('#screen-panel-frame').hidden);
+  assert(document.querySelector('.screen-reel-tool-buttons'),'Custom fit should reveal the reel frame tools');
+  button('Transform').click();
+  input(field('Screen 3 rotation'),30);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.customTransform.rotation===30,'Custom transform rotation should save to the selected screen');
+  button('Reset transform').click();await saved();
+  button('Crop').click();
+  await until(()=>field('Screen 3 crop width'));
+  input(field('Screen 3 crop width'),80);await saved();
+  input(field('Screen 3 crop left'),10);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(Math.abs(videoScreen.crop.width-.8)<.002&&Math.abs(videoScreen.crop.x-.1)<.002,'Crop controls should update the selected source region');
+  button('Reset crop').click();await saved();
+  button('Shape').click();await until(()=>field('Use Diamond frame'));field('Use Diamond frame').click();await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.frameShape==='diamond','Custom quadrilateral masks should save to the selected screen');
+  field('Use Rectangle frame').click();await saved();
+  previewPointer(previewCanvas,'pointerdown',180,320);previewPointer(previewCanvas,'pointerup',180,320);
+  await until(()=>!document.querySelector('#screen-panel-frame').hidden);
+  assert(document.querySelector('#screen-tab-frame').getAttribute('aria-selected')==='true','Selecting a screen in the reel preview should keep the Frame tab open');
   assert(Number(field('Screen 3 end').max)===Number(field('Maximum reel duration (seconds)').value),'Video start and end handles should share the full reel timeline scale');
   const videoStart=field('Screen 3 start');
   assert(Number(videoStart.max)===Number(field('Maximum reel duration (seconds)').value)-.1,'Video start should be movable to the last 0.1s of the reel');
@@ -248,6 +270,6 @@ try{
   const motionToggle=document.querySelector('.screen-setting-toggle input');motionToggle.click();await until(async()=>{const draft=await loadScreenDraft();return draft?.reducedMotion===motionToggle.checked});assert((await loadScreenDraft()).reducedMotion===motionToggle.checked,'Settings changes should save immediately');
   button('Clear draft').click();await until(()=>document.body.textContent.includes('Draft cleared on this device'));assert(await loadScreenDraft()===undefined,'Clearing after a settings change should remove the saved draft');
   document.querySelector('#screen-tab-screen').click();await until(()=>!document.querySelector('#screen-panel-screen').hidden);
-  await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:true,viewport:innerWidth,checks:['Prompt library is searchable, filterable, copyable, and responsive','Preview transport controls are accessible, aligned below the canvas, and in normal flow','Preview panel is sticky on desktop and remains in flow on mobile','New-screen timing handles share a scale and update labels independently','Settings persist and apply screen, motion, and overlay timing limits','New screens use saved Entry and Exit animation defaults','Settings toggle disables automatic screen overlap and persists','Motion duration maximum follows screen duration','Timeline remains visible while other screen fieldsets collapse','Arrow expands per-screen settings with accessible state','Fit mode reveals solid and blurred backgrounds','Solid fill renders outside contained image','Blur fill uses source screen image','Background mode, color, and strength persist','Settings autosave on change','Settings and project reset on clear','Clear prevents automatic re-save','Screen removal unlocks lower screen limit','Limit persistence and draft reload','Configurable timing reset','Per-screen timing','Image uploads','Video upload duration and crop','Overlap and layer order','Reordering','Short audio loops through the reel in preview and export paths','Export available']})});
+  await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:true,viewport:innerWidth,checks:['Prompt library is searchable, filterable, copyable, and responsive','Preview transport controls are accessible, aligned below the canvas, and in normal flow','Preview panel is sticky on desktop and remains in flow on mobile','New-screen timing handles share a scale and update labels independently','Custom-fit preview toolbar transforms, crops and masks frames','Settings persist and apply screen, motion, and overlay timing limits','New screens use saved Entry and Exit animation defaults','Settings toggle disables automatic screen overlap and persists','Motion duration maximum follows screen duration','Timeline remains visible while other screen fieldsets collapse','Arrow expands per-screen settings with accessible state','Fit mode reveals solid and blurred backgrounds','Solid fill renders outside contained image','Blur fill uses source screen image','Background mode, color, and strength persist','Settings autosave on change','Settings and project reset on clear','Clear prevents automatic re-save','Screen removal unlocks lower screen limit','Limit persistence and draft reload','Configurable timing reset','Per-screen timing','Image uploads','Video upload duration and crop','Overlap and layer order','Reordering','Short audio loops through the reel in preview and export paths','Export available']})});
  }
 }catch(error){await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:false,error:error.stack||String(error)})})}

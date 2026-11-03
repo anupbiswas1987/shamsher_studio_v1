@@ -17,6 +17,8 @@ import {
   createAnimation,
   evaluateAnimation,
   evaluateClip,
+  FRAME_SHAPES,
+  frameShapePoints,
   normalizeCrop,
   normalizeAnimation,
   renderReelFrame,
@@ -140,16 +142,11 @@ function pointInPolygon(point, corners) {
   }
   return inside;
 }
-function transformedCorners(geometry) {
+function transformedCorners(geometry, shape = "rectangle") {
   const angle = (geometry.rotation * Math.PI) / 180;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  return [
-    [-geometry.bw / 2, -geometry.bh / 2],
-    [geometry.bw / 2, -geometry.bh / 2],
-    [geometry.bw / 2, geometry.bh / 2],
-    [-geometry.bw / 2, geometry.bh / 2],
-  ].map(([x, y]) => ({
+  return frameShapePoints(shape, geometry.bw, geometry.bh).map(({ x, y }) => ({
     x: geometry.x + geometry.scale * (x * cos - y * sin),
     y: geometry.y + geometry.scale * (x * sin + y * cos),
   }));
@@ -201,6 +198,7 @@ const styles = ["None", "Fade", "Slide left", "Slide right", "Slide up", "Slide 
 export default function ScreenStudio() {
   const [activeTab, setActiveTab] = useState("Screen");
   const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [reelTool, setReelTool] = useState("transform");
   const [canvasEditing, setCanvasEditing] = useState(false);
   const [expandedScreenFields, setExpandedScreenFields] = useState({});
   const [screens,setScreens]=useState(()=>[makeScreen(0)]),
@@ -243,6 +241,7 @@ export default function ScreenStudio() {
   const canvas=useRef(),images=useRef(new Map()),audioElements=useRef(new Map()),audioPreview=useRef(null),live=useRef(),urls=useRef(new Set()),canvasDrag=useRef(null);
   const nextAudioId=useRef(1);
   const duration=Math.max(1,...screens.filter(s=>s.src).map(s=>s.end));
+  const selectedScreen = screens.find((screen) => screen.id === selectedScreenId);
   const requiredDuration=Math.max(0.1,...screens.map(s=>s.end||0),...audioClips.map((clip)=>clip.start||0));
   live.current={screens,time,duration,playing};
   function attachVideoRedraw(video) {
@@ -266,7 +265,7 @@ export default function ScreenStudio() {
     if (!screen) return;
     setSelectedScreenId(id);
     setExpandedScreenFields((current) => ({ ...current, [id]: true }));
-    setActiveTab("Screen");
+    if (activeTab !== "Frame") setActiveTab("Screen");
     setTime((current) =>
       current < screen.start || current > screen.end ? screen.start : current,
     );
@@ -276,6 +275,7 @@ export default function ScreenStudio() {
       update(screen.id, { fit });
       return;
     }
+    setReelTool("transform");
     const media = images.current.get(screen.id);
     update(screen.id, {
       fit,
@@ -283,6 +283,45 @@ export default function ScreenStudio() {
         ? customTransformFor(screen, media, time, { reducedMotion })
         : { scale: 1, x: 0, y: 0 },
       ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+    });
+  }
+  function updateSelectedCrop(field, value) {
+    if (!selectedScreen) return;
+    const crop = normalizeCrop(selectedScreen.crop);
+    const amount = Number(value) / 100;
+    const next = { ...crop };
+    if (field === "x") next.x = Math.min(amount, 1 - crop.width);
+    if (field === "y") next.y = Math.min(amount, 1 - crop.height);
+    if (field === "width")
+      next.width = Math.min(Math.max(0.01, amount), 1 - crop.x);
+    if (field === "height")
+      next.height = Math.min(Math.max(0.01, amount), 1 - crop.y);
+    update(selectedScreen.id, {
+      fit: "custom",
+      fitManuallySet: true,
+      crop: next,
+    });
+  }
+  function updateSelectedTransform(field, value) {
+    if (!selectedScreen) return;
+    update(selectedScreen.id, {
+      fit: "custom",
+      fitManuallySet: true,
+      customTransform: {
+        scale: 1,
+        x: 0,
+        y: 0,
+        ...selectedScreen.customTransform,
+        [field]: Number(value),
+      },
+    });
+  }
+  function updateSelectedFrameShape(frameShape) {
+    if (!selectedScreen) return;
+    update(selectedScreen.id, {
+      fit: "custom",
+      fitManuallySet: true,
+      frameShape,
     });
   }
   useEffect(() => {
@@ -723,7 +762,10 @@ export default function ScreenStudio() {
       t,
       { reducedMotion },
     );
-    const corners = transformedCorners(geometry);
+    const corners = transformedCorners(
+      geometry,
+      selected.fit === "custom" ? selected.frameShape : "rectangle",
+    );
     ctx.save();
     ctx.beginPath();
     corners.forEach((point, index) => {
@@ -768,7 +810,10 @@ export default function ScreenStudio() {
           )
         : null;
     const resizeHandle = selectedGeometry
-      ? transformedCorners(selectedGeometry)[2]
+      ? transformedCorners(
+          selectedGeometry,
+          selected.fit === "custom" ? selected.frameShape : "rectangle",
+        )[2]
       : null;
     let hit = null;
     let mode = "move";
@@ -789,7 +834,15 @@ export default function ScreenStudio() {
           time,
           { reducedMotion },
         );
-        if (pointInPolygon(point, transformedCorners(geometry))) {
+        if (
+          pointInPolygon(
+            point,
+            transformedCorners(
+              geometry,
+              screen.fit === "custom" ? screen.frameShape : "rectangle",
+            ),
+          )
+        ) {
           hit = screen;
           break;
         }
@@ -1332,6 +1385,9 @@ export default function ScreenStudio() {
       setExporting(false);
     }
   }
+  const selectedCrop = selectedScreen
+    ? normalizeCrop(selectedScreen.crop)
+    : { x: 0, y: 0, width: 1, height: 1 };
   return (
     <div className="screen-studio">
       <header>
@@ -1357,7 +1413,7 @@ export default function ScreenStudio() {
       >
         <section className="screen-editor">
           <div className="screen-tabs" role="tablist" aria-label="Editor sections">
-            {["Screen", "Audio", "Settings", "Timeline", "Prompts"].map((tab, index, tabs) => (
+            {["Screen", "Frame", "Audio", "Settings", "Timeline", "Prompts"].map((tab, index, tabs) => (
               <button
                 key={tab}
                 id={`screen-tab-${tab.toLowerCase()}`}
@@ -1958,7 +2014,224 @@ export default function ScreenStudio() {
           </fieldset>
           </section>
           <section
-            id="screen-panel-audio"
+           id="screen-panel-frame"
+           className="screen-tab-panel screen-frame-tools-panel"
+           role="tabpanel"
+           aria-labelledby="screen-tab-frame"
+           tabIndex={0}
+           hidden={activeTab !== "Frame"}
+          >
+           <h2>Frame tools</h2>
+           {selectedScreen?.src && selectedScreen.fit === "custom" ? (
+             <>
+               <p className="screen-frame-tools-description">
+                 Adjust the selected screen. Changes are saved with the reel and included in export.
+               </p>
+               <div className="screen-reel-tools">
+                 <div
+                   className="screen-reel-tool-buttons"
+                   role="group"
+                   aria-label={`Screen ${selectedScreen.id} frame tools`}
+                 >
+                   {[
+                     { value: "transform", label: "Transform" },
+                     { value: "crop", label: "Crop" },
+                     { value: "shape", label: "Shape" },
+                   ].map((tool) => (
+                     <button
+                       key={tool.value}
+                       type="button"
+                       className="screen-reel-tool"
+                       aria-label={`${tool.label} selected frame`}
+                       aria-pressed={reelTool === tool.value}
+                       title={`${tool.label} selected frame`}
+                       onClick={() => setReelTool(tool.value)}
+                     >
+                       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                         {tool.value === "transform" && (
+                           <>
+                             <path d="M4 4h6v6H4zM14 14h6v6h-6z" />
+                             <path d="M10 7h3a4 4 0 0 1 4 4v3M7 10v3a4 4 0 0 0 4 4h3" />
+                           </>
+                         )}
+                         {tool.value === "crop" && (
+                           <path d="M8 3v13a2 2 0 0 0 2 2h11M3 8h13a2 2 0 0 1 2 2v11" />
+                         )}
+                         {tool.value === "shape" && (
+                           <path d="m12 3 9 6-3 12H6L3 9z" />
+                         )}
+                       </svg>
+                       <span>{tool.label}</span>
+                     </button>
+                   ))}
+                 </div>
+                 {reelTool === "transform" && (
+                   <div className="screen-reel-transform-controls">
+                     <p className="screen-reel-tool-help">
+                       Drag the frame in the preview to reposition it or drag its corner to resize.
+                     </p>
+                     {[
+                       {
+                         field: "scale",
+                         label: "Zoom",
+                         min: 0.1,
+                         max: 8,
+                         step: 0.05,
+                         value: Math.min(
+                           8,
+                           Math.max(0.1, selectedScreen.customTransform?.scale ?? 1),
+                         ),
+                         formatted: (value) => `${Number(value).toFixed(2)}×`,
+                       },
+                       {
+                         field: "rotation",
+                         label: "Rotation",
+                         min: -180,
+                         max: 180,
+                         step: 1,
+                         value: Math.min(
+                           180,
+                           Math.max(-180, selectedScreen.customTransform?.rotation ?? 0),
+                         ),
+                         formatted: (value) => `${Math.round(Number(value))}°`,
+                       },
+                     ].map((control) => (
+                       <label className="screen-reel-transform-field" key={control.field}>
+                         <span>
+                           {control.label} <output>{control.formatted(control.value)}</output>
+                         </span>
+                         <input
+                           type="range"
+                           aria-label={`Screen ${selectedScreen.id} ${control.label.toLowerCase()}`}
+                           min={control.min}
+                           max={control.max}
+                           step={control.step}
+                           value={control.value}
+                           onChange={(event) =>
+                             updateSelectedTransform(control.field, event.target.value)
+                           }
+                         />
+                       </label>
+                     ))}
+                     <button
+                       type="button"
+                       className="screen-reel-reset-transform"
+                       onClick={() =>
+                         update(selectedScreen.id, {
+                           fit: "custom",
+                           fitManuallySet: true,
+                           customTransform: { scale: 1, x: 0, y: 0, rotation: 0 },
+                         })
+                       }
+                     >
+                       Reset transform
+                     </button>
+                   </div>
+                 )}
+                 {reelTool === "crop" && (
+                   <fieldset className="screen-reel-crop-controls">
+                     <legend>Crop source image</legend>
+                     {[
+                       {
+                         field: "x",
+                         label: "Left",
+                         value: selectedCrop.x * 100,
+                         min: 0,
+                         max: Math.max(0, (1 - selectedCrop.width) * 100),
+                       },
+                       {
+                         field: "y",
+                         label: "Top",
+                         value: selectedCrop.y * 100,
+                         min: 0,
+                         max: Math.max(0, (1 - selectedCrop.height) * 100),
+                       },
+                       {
+                         field: "width",
+                         label: "Width",
+                         value: selectedCrop.width * 100,
+                         min: 1,
+                         max: Math.max(1, (1 - selectedCrop.x) * 100),
+                       },
+                       {
+                         field: "height",
+                         label: "Height",
+                         value: selectedCrop.height * 100,
+                         min: 1,
+                         max: Math.max(1, (1 - selectedCrop.y) * 100),
+                       },
+                     ].map((control) => (
+                       <label className="screen-reel-crop-field" key={control.field}>
+                         <span>
+                           {control.label}{" "}
+                           <output>{control.value.toFixed(1)}%</output>
+                         </span>
+                         <input
+                           type="range"
+                           aria-label={`Screen ${selectedScreen.id} crop ${control.label.toLowerCase()}`}
+                           min={control.min}
+                           max={control.max}
+                           step="0.1"
+                           value={control.value}
+                           onChange={(event) =>
+                             updateSelectedCrop(control.field, event.target.value)
+                           }
+                         />
+                       </label>
+                     ))}
+                     <button
+                       type="button"
+                       className="screen-reel-reset-crop"
+                       onClick={() =>
+                         update(selectedScreen.id, {
+                           fit: "custom",
+                           fitManuallySet: true,
+                           crop: { x: 0, y: 0, width: 1, height: 1 },
+                         })
+                       }
+                     >
+                       Reset crop
+                     </button>
+                   </fieldset>
+                 )}
+                 {reelTool === "shape" && (
+                   <fieldset className="screen-reel-shape-controls">
+                     <legend>Frame shape</legend>
+                     <div className="screen-reel-shape-options">
+                       {FRAME_SHAPES.map((shape) => (
+                         <button
+                           key={shape.value}
+                           type="button"
+                           aria-label={`Use ${shape.label} frame`}
+                           aria-pressed={
+                             (selectedScreen.frameShape || "rectangle") === shape.value
+                           }
+                           title={shape.label}
+                           onClick={() => updateSelectedFrameShape(shape.value)}
+                         >
+                           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                             <polygon
+                               points={frameShapePoints(shape.value, 18, 18)
+                                 .map(({ x, y }) => `${x + 12},${y + 12}`)
+                                 .join(" ")}
+                             />
+                           </svg>
+                           <span>{shape.label}</span>
+                         </button>
+                       ))}
+                     </div>
+                   </fieldset>
+                 )}
+               </div>
+             </>
+           ) : (
+             <p className="screen-frame-tools-empty">
+               Select a screen and set its fit to <strong>Custom</strong> in the Screen tab to use frame tools.
+             </p>
+           )}
+          </section>
+          <section
+           id="screen-panel-audio"
             className="screen-tab-panel"
             role="tabpanel"
             aria-labelledby="screen-tab-audio"

@@ -1,6 +1,13 @@
 // Deterministic camera evaluation. Positions are percentages of the 360 × 640 stage;
 // rotation is degrees, scale is relative to the aspect-preserving image fit.
 export const PROPERTIES = ["x", "y", "scale", "rotation", "opacity"];
+export const FRAME_SHAPES = [
+  { value: "rectangle", label: "Rectangle" },
+  { value: "trapezoid", label: "Trapezoid" },
+  { value: "parallelogram", label: "Parallelogram" },
+  { value: "diamond", label: "Diamond" },
+  { value: "kite", label: "Kite" },
+];
 export const EASINGS = {
   linear: (t) => t,
   "ease-in": (t) => t * t,
@@ -211,6 +218,42 @@ export function normalizeCrop(crop) {
     height: clamp(finite(crop?.height, 1), 0.01, 1 - y),
   };
 }
+export function frameShapePoints(shape, width, height) {
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const points = {
+    trapezoid: [
+      [-halfWidth * 0.62, -halfHeight],
+      [halfWidth * 0.62, -halfHeight],
+      [halfWidth, halfHeight],
+      [-halfWidth, halfHeight],
+    ],
+    parallelogram: [
+      [-halfWidth * 0.55, -halfHeight],
+      [halfWidth, -halfHeight],
+      [halfWidth * 0.55, halfHeight],
+      [-halfWidth, halfHeight],
+    ],
+    diamond: [
+      [0, -halfHeight],
+      [halfWidth, 0],
+      [0, halfHeight],
+      [-halfWidth, 0],
+    ],
+    kite: [
+      [0, -halfHeight],
+      [halfWidth, -halfHeight * 0.12],
+      [halfWidth * 0.24, halfHeight],
+      [-halfWidth, -halfHeight * 0.12],
+    ],
+  }[shape];
+  return (points || [
+    [-halfWidth, -halfHeight],
+    [halfWidth, -halfHeight],
+    [halfWidth, halfHeight],
+    [-halfWidth, halfHeight],
+  ]).map(([x, y]) => ({ x, y }));
+}
 export function imageGeometry(
   clip,
   image,
@@ -235,7 +278,8 @@ export function imageGeometry(
     base = (fit === "cover" ? Math.max : Math.min)(width / sw, height / sh),
     bw = sw * base,
     bh = sh * base,
-    angle = (state.rotation * Math.PI) / 180,
+    angle =
+      ((state.rotation + finite(customTransform.rotation, 0)) * Math.PI) / 180,
     cos = Math.cos(angle),
     sin = Math.sin(angle);
   // A constant overscan baseline preserves zoom movement in Cover mode. Merely
@@ -320,7 +364,7 @@ export function imageGeometry(
     x,
     y,
     scale,
-    rotation: state.rotation,
+    rotation: state.rotation + finite(customTransform.rotation, 0),
     opacity: state.opacity,
     bw,
     bh,
@@ -386,6 +430,20 @@ export function renderClip(ctx, clip, image, time, options = {}) {
   ctx.translate(g.x, g.y);
   ctx.rotate((g.rotation * Math.PI) / 180);
   ctx.scale(g.scale, g.scale);
+  if (
+    clip.fit === "custom" &&
+    clip.frameShape !== "rectangle" &&
+    FRAME_SHAPES.some((shape) => shape.value === clip.frameShape)
+  ) {
+    const points = frameShapePoints(clip.frameShape, g.bw, g.bh);
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.clip();
+  }
   ctx.drawImage(
     image,
     g.sx,
