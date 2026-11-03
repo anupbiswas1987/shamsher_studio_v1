@@ -220,13 +220,18 @@ export function imageGeometry(
   options = {},
 ) {
   const a = normalizeAnimation(clip.animation),
+    customTransform =
+      clip.fit === "custom"
+        ? clip.customTransform || { scale: 1, x: 0, y: 0 }
+        : { scale: 1, x: 0, y: 0 },
     crop =
-      clip.fit === "crop"
+      clip.fit === "crop" || clip.fit === "custom"
         ? normalizeCrop(clip.crop)
         : { x: 0, y: 0, width: 1, height: 1 },
     sw = image.width * crop.width,
     sh = image.height * crop.height,
-    fit = clip.fit === "cover" || clip.fit === "crop" ? "cover" : "contain",
+    fit =
+      clip.fit === "cover" || clip.fit === "crop" ? "cover" : "contain",
     base = (fit === "cover" ? Math.max : Math.min)(width / sw, height / sh),
     bw = sw * base,
     bh = sh * base,
@@ -251,9 +256,11 @@ export function imageGeometry(
       }
     baseline = 1 / Math.min(1, ...candidates);
   }
-  let scale = state.scale * baseline,
+  let scale = state.scale * baseline * clamp(finite(customTransform.scale, 1), 0.1, 8),
     x = width / 2 + (state.x * width) / 100,
     y = height / 2 + (state.y * height) / 100;
+  x += finite(customTransform.x, 0);
+  y += finite(customTransform.y, 0);
   // Anchor zoom to an image-space focal point, after translating it into the crop.
   const fx = clamp((a.focal.x - crop.x) / crop.width, 0, 1) - 0.5,
     fy = clamp((a.focal.y - crop.y) / crop.height, 0, 1) - 0.5;
@@ -261,7 +268,7 @@ export function imageGeometry(
   y -= fy * bh * (scale - 1);
   const requested = { x, y, scale };
   let protectedContent = false;
-  if (fit === "contain" && a.protectContent) {
+  if (clip.fit === "contain" && a.protectContent) {
     const rw = Math.abs(bw * cos) + Math.abs(bh * sin),
       rh = Math.abs(bw * sin) + Math.abs(bh * cos),
       maxScale = Math.min(width / rw, height / rh);
@@ -350,6 +357,7 @@ export function evaluateClip(clip, image, time, options = {}) {
   };
 }
 export function renderClip(ctx, clip, image, time, options = {}) {
+  if (image.videoWidth && image.readyState < 2) return null;
   const g = evaluateClip(clip, image, time, options);
   ctx.save();
   ctx.globalAlpha = g.opacity;
@@ -397,13 +405,19 @@ export function renderReelFrame(ctx, clips, images, time, options = {}) {
   ctx.fillRect(0, 0, 360, 640);
   const lastEnd = Math.max(
     0,
-    ...clips.filter((c) => c.src && images.has(c.id)).map((c) => c.end),
+    ...clips
+      .filter((c) => {
+        const media = images.get(c.id);
+        return c.src && media && (!media.videoWidth || media.readyState >= 2);
+      })
+      .map((c) => c.end),
   );
   for (const clip of clips) {
     const image = images.get(clip.id);
     if (
       clip.src &&
       image &&
+      (!image.videoWidth || image.readyState >= 2) &&
       time >= clip.start &&
       (time < clip.end || (time === lastEnd && clip.end === lastEnd))
     )

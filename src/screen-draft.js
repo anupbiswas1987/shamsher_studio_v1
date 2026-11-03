@@ -44,6 +44,7 @@ export const clearScreenDraft = () =>
   transaction("readwrite", (store) => store.delete("current"));
 export function draftSnapshot({
   screens,
+  audioClips,
   audio,
   audioStart,
   volume,
@@ -58,12 +59,29 @@ export function draftSnapshot({
   defaultEntry = "None",
   defaultExit = "None",
 }) {
+  const clips =
+    audioClips ??
+    (audio
+      ? [
+          {
+            ...audio,
+            start: audioStart ?? 0,
+            volume: volume ?? 1,
+            trimStart: 0,
+            trimEnd: 0,
+            repeatToEnd: true,
+          },
+        ]
+      : []);
+  const storedClips = clips.map(({ src, ...clip }) => clip);
+  const legacyAudio = storedClips[0] ?? null;
   return {
     version: 2,
     screens: screens.map(({ src, ...screen }) => screen),
-    audio: audio ? (({ src, ...clip }) => clip)(audio) : null,
-    audioStart,
-    volume,
+    audio: legacyAudio,
+    audioClips: storedClips,
+    audioStart: legacyAudio?.start ?? audioStart ?? 0,
+    volume: legacyAudio?.volume ?? volume ?? 1,
     format,
     reducedMotion,
     autoOverlap,

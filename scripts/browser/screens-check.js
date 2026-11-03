@@ -3,7 +3,9 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms)),assert=(value,message)=>{if(!val
 const field=label=>document.querySelector(`[aria-label="${label}"]`),button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
 function input(el,value){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,String(value));el.dispatchEvent(new Event('input',{bubbles:true}))}
 async function saved(){await wait(80);await until(()=>document.body.textContent.includes('Draft saved on this device'));return loadScreenDraft()}
-async function upload(id,color,width=360,height=640){const c=document.createElement('canvas');c.width=width;c.height=height;const ctx=c.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,width,height);const blob=await new Promise(r=>c.toBlob(r)),data=new DataTransfer();data.items.add(new File([blob],`screen-${id}.png`,{type:'image/png'}));field(`Upload screen ${id}`).files=data.files;field(`Upload screen ${id}`).dispatchEvent(new Event('change',{bubbles:true}));await until(()=>document.querySelectorAll('.screen-thumb img').length>=id)}
+async function upload(id,color,width=360,height=640){const c=document.createElement('canvas');c.width=width;c.height=height;const ctx=c.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,width,height);const blob=await new Promise(r=>c.toBlob(r)),data=new DataTransfer();data.items.add(new File([blob],`screen-${id}.png`,{type:'image/png'}));field(`Upload image or video for screen ${id}`).files=data.files;field(`Upload image or video for screen ${id}`).dispatchEvent(new Event('change',{bubbles:true}));await until(()=>document.querySelectorAll('.screen-thumb img').length>=id)}
+async function makeVideo(){const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;const context=canvas.getContext('2d'),stream=canvas.captureStream(10),recorder=new MediaRecorder(stream,{mimeType:'video/webm'}),chunks=[];recorder.ondataavailable=event=>{if(event.data.size)chunks.push(event.data)};const stopped=new Promise(resolve=>recorder.onstop=resolve);recorder.start();for(let i=0;i<8;i++){context.fillStyle=i%2?'#2244aa':'#aa4422';context.fillRect(0,0,160,90);await wait(100)}recorder.stop();await stopped;stream.getTracks().forEach(track=>track.stop());return new File([new Blob(chunks,{type:'video/webm'})],'check-video.webm',{type:'video/webm'})}
+function previewPointer(canvas,type,x,y){const rect=canvas.getBoundingClientRect();canvas.setPointerCapture=()=>{};canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:1,clientX:rect.left+(x/360)*rect.width,clientY:rect.top+(y/640)*rect.height}))}
 try{
  await until(()=>document.body.textContent.includes('Draft saved on this device'));
  const preview=document.querySelector('.screen-preview'),previewCanvas=preview?.querySelector('canvas'),previewControls=preview?.querySelector('.screen-controls'),restartPreview=previewControls?.querySelector('[aria-label="Restart reel preview"]'),playPreview=previewControls?.querySelector('.primary'),buttonSize=restartPreview?.getBoundingClientRect(),canvasBounds=previewCanvas?.getBoundingClientRect(),controlsBounds=previewControls?.getBoundingClientRect();
@@ -16,6 +18,34 @@ try{
  assert(document.querySelector('input[type="checkbox"]'),'Reduced motion setting missing');assert(!document.querySelector('.animation-inspector'),'Extra animation panel still present');assert(document.querySelector('.screen-settings'),'Settings panel missing');assert(field('Maximum screens')&&field('Maximum reel duration (seconds)'),'Project limit settings missing');
  assert(field('Screens use up to (seconds each)')?.type==='range'&&field('Motion timing maximum (seconds)')?.type==='range'&&field('Screen overlaying time (seconds)')?.type==='range','Screen timing settings should use range controls');
  assert(field('Default entry animation')?.tagName==='SELECT'&&field('Default exit animation')?.tagName==='SELECT','Entry and Exit default settings are missing');
+ document.querySelector('#screen-tab-prompts').click();
+ await until(()=>!document.querySelector('#screen-panel-prompts').hidden);
+ assert(document.querySelector('.screen-layout').classList.contains('screen-layout-prompts')&&getComputedStyle(document.querySelector('.screen-preview')).display==='none','Prompts should use the existing header and full-width page layout');
+ assert(document.querySelectorAll('.prompt-card').length===8,'Prompt library should show its ready-made templates');
+ assert(document.documentElement.scrollWidth<=innerWidth,'Prompt library should not overflow the viewport');
+ const promptSearch=document.querySelector('.prompt-search input');
+ input(promptSearch,'forest');
+ await until(()=>document.querySelectorAll('.prompt-card').length===1);
+ assert(document.querySelector('.prompt-card h2').textContent==='Forest morning','Prompt search should filter cards by prompt content');
+ input(promptSearch,'');
+ await until(()=>document.querySelectorAll('.prompt-card').length===8);
+ const natureFilter=[...document.querySelectorAll('.prompt-category-filters button')].find((item)=>item.textContent.trim()==='Nature');
+ natureFilter.click();
+ await until(()=>natureFilter.getAttribute('aria-pressed')==='true');
+ assert(document.querySelectorAll('.prompt-card').length===1&&document.querySelector('.prompt-card h2').textContent==='Forest morning','Category filters should show only matching prompts');
+ const copiedPrompts=[];
+ Object.defineProperty(navigator,'clipboard',{value:{writeText:async(text)=>copiedPrompts.push(text)},configurable:true});
+ document.querySelector('.prompt-copy-button').click();
+ await until(()=>document.querySelector('.prompt-copy-feedback')?.textContent.includes('Copied'));
+ assert(copiedPrompts[0].includes('forest type')&&document.querySelector('.prompt-copy-button').textContent==='Copied','Copy prompt should put the full template on the clipboard and confirm success');
+ input(promptSearch,'no matching prompt');
+ await until(()=>document.querySelector('.prompt-empty-state'));
+ assert(!document.querySelectorAll('.prompt-card').length,'Empty prompt searches should explain how to recover');
+ document.querySelector('.prompt-empty-state button').click();
+ await until(()=>document.querySelectorAll('.prompt-card').length===8);
+ assert(promptSearch.value===''&&document.querySelector('.prompt-category-filters button[aria-pressed="true"]').textContent==='All','Clear filters should restore the full prompt library');
+ document.querySelector('#screen-tab-screen').click();
+ await until(()=>!document.querySelector('#screen-panel-screen').hidden);
  if(!sessionStorage.getItem('screens-reloaded')){
   assert(field('Screens use up to (seconds each)').value==='1',`Default screen duration should equal the reel limit divided by the screen limit (got ${field('Screens use up to (seconds each)').value}, max screens ${field('Maximum screens').value}, reel ${field('Maximum reel duration (seconds)').value})`);
   assert(field('Motion timing maximum (seconds)').value==='0.5','Default Motion timing should be 0.5 seconds');
@@ -71,9 +101,58 @@ try{
   document.querySelector('#screen-tab-screen').click();
   await until(()=>!document.querySelector('#screen-panel-screen').hidden);
   [...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Add screen')).click();
-  await until(()=>field('Upload screen 2'));
+  await until(()=>field('Upload image or video for screen 2'));
   assert(document.querySelector('#screen-extra-fields-2 .screen-animation-group select').value==='Slide right'&&document.querySelectorAll('#screen-extra-fields-2 .screen-animation-group select')[1].value==='Fade','New screens should use the configured Entry and Exit defaults');
   await upload(2,'blue');
+  [...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Add screen')).click();
+  await until(()=>field('Upload image or video for screen 3'));
+  const videoInput=field('Upload image or video for screen 3'),videoData=new DataTransfer();
+  videoData.items.add(await makeVideo());videoInput.files=videoData.files;
+  videoInput.dispatchEvent(new Event('change',{bubbles:true}));
+  await until(()=>document.querySelectorAll('.screen-video-trim').length===1);
+  let videoDraft=await saved(),videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen&&Math.abs((videoScreen.end-videoScreen.start)-videoScreen.sourceDuration)<.11,'Video screen timing should follow the detected source duration');
+  assert(videoScreen.fit==='contain'&&videoScreen.sourceWidth===160&&videoScreen.sourceHeight===90,'New video screens should preserve the full source frame and report its dimensions');
+  field('Show or hide settings for screen 3').click();
+  await until(()=>field('Show or hide settings for screen 3').getAttribute('aria-expanded')==='true');
+  assert(field('Screen 3 video fit: Fit whole video').checked,'Video frame fit should default to preserving the full source frame');
+  field('Screen 3 video fit: Fill frame, crop edges').click();await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.fit==='cover'&&videoScreen.fitManuallySet,'Manual video fill/crop choice should persist');
+  field('Screen 3 video fit: Fit whole video').click();await saved();
+  const videoTrimIn=document.querySelector('.screen-video-trim input[type="number"]');
+  input(videoTrimIn,.1);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.trimIn===.1&&Math.abs((videoScreen.end-videoScreen.start)-(videoScreen.sourceDuration-.1))<.11,'Video crop-in should shorten its timeline duration');
+  const videoStartTime=field('Screen 3 start time');
+  videoStartTime.focus();input(videoStartTime,3);videoStartTime.blur();await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.start===3,'Video timeline start should be precisely editable in reel seconds');
+  const videoEndTime=field('Screen 3 end time');
+  videoEndTime.focus();input(videoEndTime,3.4);videoEndTime.blur();await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.end===3.4,'Video timeline end should be precisely editable in reel seconds');
+  input(field('Reel playhead'),3.2);await wait(300);
+  assert(field('Preview time').textContent.startsWith('3.2'),'Playhead should seek to the selected video timeline segment');
+  const previewCanvas=document.querySelector('.screen-preview canvas');
+  window.__canvasDown=false;previewCanvas.addEventListener('pointerdown',()=>window.__canvasDown=true,{once:true});
+  previewPointer(previewCanvas,'pointerdown',180,320);previewPointer(previewCanvas,'pointerup',180,320);
+  await until(()=>document.querySelectorAll('.screen-select-preview')[2].getAttribute('aria-pressed')==='true');
+  assert(field('Show or hide settings for screen 3').getAttribute('aria-expanded')==='true','Clicking a visible video should reveal its timing controls');
+  previewPointer(previewCanvas,'pointerdown',180,320);previewPointer(previewCanvas,'pointermove',170,310);previewPointer(previewCanvas,'pointerup',170,310);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.fit==='custom'&&videoScreen.customTransform.x===-10&&videoScreen.customTransform.y===-10,'Dragging a selected video should move it using custom frame fit');
+  previewPointer(previewCanvas,'pointerdown',350,411);previewPointer(previewCanvas,'pointermove',365,426);previewPointer(previewCanvas,'pointerup',365,426);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.customTransform.scale>1,'Dragging the selected frame corner should resize the video');
+  assert(Number(field('Screen 3 end').max)===Number(field('Maximum reel duration (seconds)').value),'Video start and end handles should share the full reel timeline scale');
+  const videoStart=field('Screen 3 start');
+  assert(Number(videoStart.max)===Number(field('Maximum reel duration (seconds)').value)-.1,'Video start should be movable to the last 0.1s of the reel');
+  input(videoStart,videoStart.max);await saved();videoDraft=await loadScreenDraft();
+  videoScreen=videoDraft.screens.find(screen=>screen.mediaType==='video');
+  assert(videoScreen.end===Number(field('Maximum reel duration (seconds)').value)&&videoScreen.end-videoScreen.start<=.11,'Moving video to the reel end should shorten its timeline instead of blocking the start');
+  window.confirm=()=>true;document.querySelector('[aria-label="Remove screen 3"]').click();
+  await until(()=>document.querySelectorAll('.screen-row').length===2);await saved();
   const secondToggle=field('Show or hide settings for screen 2');
   assert(secondToggle.getAttribute('aria-expanded')==='false'&&document.querySelector('#screen-extra-fields-2').hidden,'New screen settings should start collapsed with its timeline available');
   secondToggle.click();
@@ -156,7 +235,8 @@ try{
   assert(document.querySelector('.screen-fit-background'),'Fit whole image should reveal background fill options');document.querySelector('input[name="screen-1-background"][value="color"]').click();input(field('Screen 1 background color'),'#123456');assert(field('Screen 1 background color').value==='#123456','Solid background color should update');input(field('Reel playhead'),1);await wait(60);let fillPixel=document.querySelector('.screen-preview canvas').getContext('2d').getImageData(180,10,1,1).data;assert(fillPixel[0]===18&&fillPixel[1]===52&&fillPixel[2]===86,`Solid fill color should render in the empty fit area (got ${[...fillPixel].join(',')})`);document.querySelector('input[name="screen-1-background"][value="blur"]').click();input(field('Screen 1 background blur'),24);assert(field('Screen 1 background blur').value==='24','Blur strength should update');await wait(60);fillPixel=document.querySelector('.screen-preview canvas').getContext('2d').getImageData(180,60,1,1).data;assert(fillPixel[0]>200&&fillPixel[1]<40&&fillPixel[2]<40,'Blur fill should use the screen image');await saved();
   input(field('Reel playhead'),3.5);await wait(60);let pixel=document.querySelector('.screen-preview canvas').getContext('2d').getImageData(180,320,1,1).data;assert(pixel[2]>200,'Later screen should composite on top');field('Move screen 2 up').click();await saved();input(field('Reel playhead'),2.5);await wait(60);pixel=document.querySelector('.screen-preview canvas').getContext('2d').getImageData(180,320,1,1).data;assert(pixel[0]>200,'Reordering should change layer order during an animation overlap');input(field('Screen 1 motion'),1.2);await saved();
   document.querySelector('#screen-tab-settings').click();await until(()=>!document.querySelector('#screen-panel-settings').hidden);button('Reset timing by order').click();await saved();assert(field('Screen 2 start').value==='0'&&field('Screen 1 start').value==='2.2',`Timing reset should apply configured animation defaults and their overlap (got ${field('Screen 2 start').value}/${field('Screen 1 start').value})`);
-  const tone=new DataTransfer();tone.items.add(new File([await (await fetch('/__check-tone.wav')).blob()],'voice.wav',{type:'audio/wav'}));const a=document.querySelector('input[accept="audio/*"]');a.files=tone.files;a.dispatchEvent(new Event('change',{bubbles:true}));await until(()=>document.querySelector('.screen-audio p'));input(document.querySelector('.screen-audio input[type="number"]'),.5);input(document.querySelector('.screen-audio input[type="range"]'),.4);await saved();
+  const tone=new DataTransfer();tone.items.add(new File([await (await fetch('/__check-tone.wav')).blob()],'voice.wav',{type:'audio/wav'}));const a=document.querySelector('input[accept="audio/*"]');a.files=tone.files;a.dispatchEvent(new Event('change',{bubbles:true}));await until(()=>document.querySelector('.screen-audio p'));input(document.querySelector('.screen-audio input[type="number"]'),.5);input(document.querySelector('.screen-audio input[type="range"]'),.4);await saved();const audioElement=document.querySelector('.screen-studio audio');await until(()=>Number.isFinite(audioElement.duration)&&audioElement.duration>0);assert(document.querySelector('.screen-audio p').textContent.includes('Repeats to fill the remaining'),'Audio settings should explain when a short audio file repeats');document.querySelector('.screen-controls .primary').click();await wait(1700);assert(audioElement.loop&&!audioElement.paused&&audioElement.currentTime<audioElement.duration,'Preview audio should loop while the reel continues');document.querySelector('.screen-controls .primary').click();await until(()=>audioElement.paused);
+  const secondTone=new DataTransfer();secondTone.items.add(new File([await (await fetch('/__check-tone.wav')).blob()],'second-voice.wav',{type:'audio/wav'}));assert(document.querySelector('input[accept="audio/*"]').multiple,'Audio upload should accept multiple files');const uploadAudio=document.querySelector('input[accept="audio/*"]');uploadAudio.files=secondTone.files;uploadAudio.dispatchEvent(new Event('change',{bubbles:true}));await until(()=>document.querySelectorAll('.screen-audio-clip').length===2);const secondTrack=document.querySelectorAll('.screen-audio-clip')[1],cropStart=secondTrack.querySelector('.screen-audio-clip-controls label:nth-of-type(2) input');input(cropStart,.1);assert(cropStart.value==='0.1','Audio crop start should be editable');const repeatTrack=secondTrack.querySelector('.screen-audio-repeat input');assert(repeatTrack.checked,'Repeat-to-reel option should preserve existing repeat behavior by default');repeatTrack.click();assert(!repeatTrack.checked,'Repeat-to-reel option should be switchable off');repeatTrack.click();const trackPreview=secondTrack.querySelector('[aria-label^="Play preview"]');assert(trackPreview&&secondTrack.querySelector('.screen-audio-seek input[type="range"]'),'Each audio track should have its own playable timeline');trackPreview.click();await until(()=>trackPreview.getAttribute('aria-label').startsWith('Pause'));trackPreview.click();await until(()=>trackPreview.getAttribute('aria-label').startsWith('Play'));
   document.querySelector('#screen-tab-screen').click();await until(()=>!document.querySelector('#screen-panel-screen').hidden);input(field('Screen 1 end'),4.5);await saved();
   document.querySelector('#screen-tab-settings').click();await until(()=>!document.querySelector('#screen-panel-settings').hidden);assert(field('Maximum screens').min==='2','Maximum screen count must not fall below current content');const screenLimit=field('Maximum screens');screenLimit.focus();input(screenLimit,1);screenLimit.blur();await until(()=>screenLimit.value==='30');screenLimit.focus();input(screenLimit,3);screenLimit.blur();await until(()=>screenLimit.value==='3');
   const durationLimit=field('Maximum reel duration (seconds)');durationLimit.focus();input(durationLimit,4);durationLimit.blur();await until(()=>durationLimit.value==='30');durationLimit.focus();input(durationLimit,5);await until(()=>durationLimit.value==='5');await until(()=>field('Reel playhead').max==='5');assert(document.querySelector('.screen-timeline-heading > span').textContent.endsWith('/ 5.0s'),'Timeline clock should use the configured maximum duration');await saved();button('Reset timing by order').click();await saved();
@@ -168,6 +248,6 @@ try{
   const motionToggle=document.querySelector('.screen-setting-toggle input');motionToggle.click();await until(async()=>{const draft=await loadScreenDraft();return draft?.reducedMotion===motionToggle.checked});assert((await loadScreenDraft()).reducedMotion===motionToggle.checked,'Settings changes should save immediately');
   button('Clear draft').click();await until(()=>document.body.textContent.includes('Draft cleared on this device'));assert(await loadScreenDraft()===undefined,'Clearing after a settings change should remove the saved draft');
   document.querySelector('#screen-tab-screen').click();await until(()=>!document.querySelector('#screen-panel-screen').hidden);
-  await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:true,viewport:innerWidth,checks:['Preview transport controls are accessible, aligned below the canvas, and in normal flow','Preview panel is sticky on desktop and remains in flow on mobile','New-screen timing handles share a scale and update labels independently','Settings persist and apply screen, motion, and overlay timing limits','New screens use saved Entry and Exit animation defaults','Settings toggle disables automatic screen overlap and persists','Motion duration maximum follows screen duration','Timeline remains visible while other screen fieldsets collapse','Arrow expands per-screen settings with accessible state','Fit mode reveals solid and blurred backgrounds','Solid fill renders outside contained image','Blur fill uses source screen image','Background mode, color, and strength persist','Settings autosave on change','Settings and project reset on clear','Clear prevents automatic re-save','Screen removal unlocks lower screen limit','Limit persistence and draft reload','Configurable timing reset','Per-screen timing','Image uploads','Overlap and layer order','Reordering','Audio layer','Export available']})});
+  await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:true,viewport:innerWidth,checks:['Prompt library is searchable, filterable, copyable, and responsive','Preview transport controls are accessible, aligned below the canvas, and in normal flow','Preview panel is sticky on desktop and remains in flow on mobile','New-screen timing handles share a scale and update labels independently','Settings persist and apply screen, motion, and overlay timing limits','New screens use saved Entry and Exit animation defaults','Settings toggle disables automatic screen overlap and persists','Motion duration maximum follows screen duration','Timeline remains visible while other screen fieldsets collapse','Arrow expands per-screen settings with accessible state','Fit mode reveals solid and blurred backgrounds','Solid fill renders outside contained image','Blur fill uses source screen image','Background mode, color, and strength persist','Settings autosave on change','Settings and project reset on clear','Clear prevents automatic re-save','Screen removal unlocks lower screen limit','Limit persistence and draft reload','Configurable timing reset','Per-screen timing','Image uploads','Video upload duration and crop','Overlap and layer order','Reordering','Short audio loops through the reel in preview and export paths','Export available']})});
  }
 }catch(error){await fetch('/__check-done',{method:'POST',body:JSON.stringify({passed:false,error:error.stack||String(error)})})}

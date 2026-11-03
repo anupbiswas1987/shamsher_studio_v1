@@ -50,6 +50,31 @@ test("all eleven presets have deterministic, finite states", () => {
         assert.ok(Number.isFinite(value));
   }
 });
+test("contain fit preserves landscape video dimensions in the vertical reel", () => {
+  const geometry = imageGeometry(
+    { ...clip("still"), fit: "contain" },
+    { width: 160, height: 90 },
+    { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+  );
+  near(geometry.bw / geometry.bh, 16 / 9);
+  near(geometry.bw, 360);
+  near(geometry.bh, 202.5);
+});
+test("custom frame fit scales and positions media without changing its aspect ratio", () => {
+  const geometry = imageGeometry(
+    {
+      ...clip("still"),
+      fit: "custom",
+      customTransform: { scale: 1.5, x: 18, y: -12 },
+    },
+    { width: 160, height: 90 },
+    { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+  );
+  near(geometry.bw / geometry.bh, 16 / 9);
+  near(geometry.scale, 1.5);
+  near(geometry.x, 198);
+  near(geometry.y, 308);
+});
 test("multiple keys, segment easing, duplicate timestamps, opacity and rotation", () => {
   near(
     evaluateTrack(

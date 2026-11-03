@@ -33,3 +33,42 @@ test("draft snapshots persist reel limits without storing object URLs", () => {
   assert.equal(snapshot.screens[0].file, "image-file");
   assert.equal(snapshot.audio.file, "audio-file");
 });
+
+test("draft snapshots preserve multiple audio tracks without object URLs", () => {
+  const snapshot = draftSnapshot({
+    screens: [],
+    audioClips: [
+      {
+        id: 1,
+        src: "blob:first",
+        file: "first-file",
+        name: "first.mp3",
+        duration: 12,
+        start: 2,
+        trimStart: 1,
+        trimEnd: 3,
+        repeatToEnd: true,
+        volume: 0.5,
+      },
+      {
+        id: 2,
+        src: "blob:second",
+        file: "second-file",
+        name: "second.mp3",
+        duration: 4,
+        start: 0,
+        trimStart: 0,
+        trimEnd: 0,
+        repeatToEnd: false,
+        volume: 1,
+      },
+    ],
+  });
+
+  assert.equal(snapshot.audioClips.length, 2);
+  assert.equal(snapshot.audioClips[0].src, undefined);
+  assert.equal(snapshot.audioClips[0].file, "first-file");
+  assert.equal(snapshot.audioClips[0].repeatToEnd, true);
+  assert.equal(snapshot.audioClips[1].repeatToEnd, false);
+  assert.equal(snapshot.audio.name, "first.mp3");
+});

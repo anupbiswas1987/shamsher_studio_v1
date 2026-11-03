@@ -15,8 +15,12 @@ import {
 } from "./screen-timing";
 import {
   createAnimation,
+  evaluateAnimation,
+  evaluateClip,
+  normalizeCrop,
   normalizeAnimation,
   renderReelFrame,
+  transitionState,
 } from "./cinematic";
 import {
   loadScreenDraft,
@@ -25,6 +29,9 @@ import {
   draftSnapshot,
 } from "./screen-draft";
 import { SCREEN_EXPORT } from "./screen-export";
+import { updateVideoTiming, videoTimingFromSource } from "./screen-video.js";
+import PromptLibrary from "./PromptLibrary.jsx";
+import { audioPlaybackPosition, audioShouldLoop } from "./audio-loop.js";
 const DEFAULT_MAX_SCREENS = 30;
 const DEFAULT_MAX_DURATION = 30;
 const clampDraftSetting = (value, fallback, min, max) =>
@@ -59,9 +66,139 @@ const makeScreen = (
     animation: createAnimation("static"),
   };
 };
+function inferMediaType(file) {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  return /\.(mp4|m4v|mov|webm|ogv|ogg)$/i.test(file.name) ? "video" : null;
+}
+function VideoTimelineField({ id, label, value, min, max, onChange }) {
+  const [draft, setDraft] = useState(value.toFixed(1));
+  useEffect(() => setDraft(value.toFixed(1)), [value]);
+
+  function commit() {
+    const parsed = Number(draft);
+    if (!draft.trim() || !Number.isFinite(parsed)) {
+      setDraft(value.toFixed(1));
+      return;
+    }
+    const next = Math.min(max, Math.max(min, parsed));
+    setDraft(next.toFixed(1));
+    onChange(next);
+  }
+
+  return (
+    <label className="screen-time-input">
+      {label}
+      <input
+        aria-label={`Screen ${id} ${label.toLowerCase()} time`}
+        type="number"
+        min={min}
+        max={max}
+        step=".1"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+      />
+    </label>
+  );
+}
+function loadScreenVisual(src, mediaType) {
+  if (mediaType !== "video") {
+    const image = new Image();
+    image.src = src;
+    return image.decode().then(() => image);
+  }
+  const video = document.createElement("video");
+  video.src = src;
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  return new Promise((resolve, reject) => {
+    video.onloadeddata = () => {
+      video.width = video.videoWidth;
+      video.height = video.videoHeight;
+      resolve(video);
+    };
+    video.onerror = () => reject(Error("Could not read this video. Try MP4 or WebM."));
+  });
+}
+function pointInPolygon(point, corners) {
+  let inside = false;
+  for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+    const a = corners[i];
+    const b = corners[j];
+    const crosses =
+      a.y > point.y !== b.y > point.y &&
+      point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+function transformedCorners(geometry) {
+  const angle = (geometry.rotation * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    [-geometry.bw / 2, -geometry.bh / 2],
+    [geometry.bw / 2, -geometry.bh / 2],
+    [geometry.bw / 2, geometry.bh / 2],
+    [-geometry.bw / 2, geometry.bh / 2],
+  ].map(([x, y]) => ({
+    x: geometry.x + geometry.scale * (x * cos - y * sin),
+    y: geometry.y + geometry.scale * (x * sin + y * cos),
+  }));
+}
+function customTransformFor(screen, media, time, options) {
+  if (screen.fit === "custom" && screen.customTransform)
+    return screen.customTransform;
+  const geometry = evaluateClip(screen, media, time, options);
+  const motion = evaluateAnimation(screen, time, options);
+  const transition = transitionState(screen, time, options);
+  const crop =
+    screen.fit === "crop"
+      ? normalizeCrop(screen.crop)
+      : { x: 0, y: 0, width: 1, height: 1 };
+  const sourceWidth = media.width * crop.width;
+  const sourceHeight = media.height * crop.height;
+  const base = Math.min(360 / sourceWidth, 640 / sourceHeight);
+  const baseWidth = sourceWidth * base;
+  const baseHeight = sourceHeight * base;
+  const scale = Math.max(
+    0.1,
+    Math.min(
+      8,
+      (geometry.bw * geometry.scale) /
+        (baseWidth * motion.scale * transition.scale),
+    ),
+  );
+  const totalScale = motion.scale * scale;
+  const animation = normalizeAnimation(screen.animation);
+  const fx =
+    (Math.max(0, Math.min(1, (animation.focal.x - crop.x) / crop.width)) - 0.5) *
+    baseWidth;
+  const fy =
+    (Math.max(0, Math.min(1, (animation.focal.y - crop.y) / crop.height)) - 0.5) *
+    baseHeight;
+  return {
+    scale,
+    x:
+      geometry.x -
+      transition.x -
+      (180 + motion.x * 3.6 - fx * (totalScale - 1)),
+    y:
+      geometry.y -
+      transition.y -
+      (320 + motion.y * 6.4 - fy * (totalScale - 1)),
+  };
+}
 const styles = ["None", "Fade", "Slide left", "Slide right", "Slide up", "Slide down", "Zoom"];
 export default function ScreenStudio() {
   const [activeTab, setActiveTab] = useState("Screen");
+  const [selectedScreenId, setSelectedScreenId] = useState(null);
+  const [canvasEditing, setCanvasEditing] = useState(false);
   const [expandedScreenFields, setExpandedScreenFields] = useState({});
   const [screens,setScreens]=useState(()=>[makeScreen(0)]),
     [maxScreens,setMaxScreens]=useState(DEFAULT_MAX_SCREENS),
@@ -70,9 +207,9 @@ export default function ScreenStudio() {
     [maxReelDurationInput,setMaxReelDurationInput]=useState(String(DEFAULT_MAX_DURATION)),
     [time,setTime]=useState(0),
     [playing, setPlaying] = useState(false),
-    [audio,setAudio]=useState(null),
-    [audioStart,setAudioStart]=useState(0),
-    [volume,setVolume]=useState(1),
+    [audioClips,setAudioClips]=useState([]),
+    [previewingAudioId,setPreviewingAudioId]=useState(null),
+    [audioPreviewPositions,setAudioPreviewPositions]=useState({}),
     [autoOverlap,setAutoOverlap]=useState(true),
     [maxScreenDuration,setMaxScreenDuration]=useState(DEFAULT_SCREEN_DURATION),
     [maxMotionDuration,setMaxMotionDuration]=useState(DEFAULT_MOTION_DURATION),
@@ -100,12 +237,50 @@ export default function ScreenStudio() {
     maxReelDuration,
     maxScreens,
   );
-  const canvas=useRef(),images=useRef(new Map()),sound=useRef(),live=useRef(),urls=useRef(new Set());
+  const canvas=useRef(),images=useRef(new Map()),audioElements=useRef(new Map()),audioPreview=useRef(null),live=useRef(),urls=useRef(new Set()),canvasDrag=useRef(null);
+  const nextAudioId=useRef(1);
   const duration=Math.max(1,...screens.filter(s=>s.src).map(s=>s.end));
-  const requiredDuration=Math.max(0.1,audioStart,...screens.map(s=>s.end||0));
-  live.current={screens,time,duration};
+  const requiredDuration=Math.max(0.1,...screens.map(s=>s.end||0),...audioClips.map((clip)=>clip.start||0));
+  live.current={screens,time,duration,playing};
+  function attachVideoRedraw(video) {
+    const redraw = () => {
+      requestAnimationFrame(() => {
+        const ctx = canvas.current?.getContext("2d");
+        if (ctx) {
+          draw(ctx, live.current.time, live.current.screens, live.current.playing);
+          drawSelection(ctx, live.current.time, live.current.screens);
+        }
+      });
+    };
+    video.onseeked = redraw;
+    video.onloadeddata = redraw;
+  }
   function notify(message, type = "info") {
     setNotice({ message, type });
+  }
+  function selectScreen(id) {
+    const screen = screens.find((item) => item.id === id);
+    if (!screen) return;
+    setSelectedScreenId(id);
+    setExpandedScreenFields((current) => ({ ...current, [id]: true }));
+    setActiveTab("Screen");
+    setTime((current) =>
+      current < screen.start || current > screen.end ? screen.start : current,
+    );
+  }
+  function setScreenFit(screen, fit) {
+    if (fit !== "custom") {
+      update(screen.id, { fit });
+      return;
+    }
+    const media = images.current.get(screen.id);
+    update(screen.id, {
+      fit,
+      customTransform: media
+        ? customTransformFor(screen, media, time, { reducedMotion })
+        : { scale: 1, x: 0, y: 0 },
+      ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+    });
   }
   useEffect(() => {
     if (!notice) return;
@@ -131,9 +306,22 @@ export default function ScreenStudio() {
         defaultEntry,
         defaultExit,
       });
+      const durationAdjusted = next.map((screen) => {
+        if (screen.mediaType !== "video") return screen;
+        const trimIn = screen.trimIn || 0;
+        const available = screen.sourceDuration - trimIn - (screen.trimOut || 0);
+        const end = Math.min(maxReelDuration, screen.start + available);
+        return {
+          ...screen,
+          end,
+          trimOut:
+            (screen.trimOut || 0) +
+            Math.max(0, screen.start + available - end),
+        };
+      });
       setPlaying(false);
       setTime(0);
-      setScreens(next);
+      setScreens(durationAdjusted);
       notify(
         autoOverlap
           ? `Timing and animation types reset within the ${maxReelDuration}s reel limit. Screens are capped at ${maxScreenDuration.toFixed(1)}s each with up to ${maxOverlayDuration.toFixed(1)}s overlap.`
@@ -163,21 +351,35 @@ export default function ScreenStudio() {
     const screen = screens.find((item) => item.id === id);
     if (!screen || screens.length <= 1) return;
     if (!window.confirm(`Remove screen ${id} from this reel?`)) return;
+    releaseScreenVisual(screen);
+    setPlaying(false);
+    setTime(0);
+    setScreens((current) => current.filter((item) => item.id !== id));
+  }
+  function releaseScreenVisual(screen) {
+    images.current.get(screen.id)?.pause?.();
+    images.current.delete(screen.id);
     if (screen.src?.startsWith("blob:")) {
       URL.revokeObjectURL(screen.src);
       urls.current.delete(screen.src);
     }
-    images.current.delete(id);
-    setPlaying(false);
-    setTime(0);
-    setScreens((current) => current.filter((item) => item.id !== id));
   }
   const update = (id, change) => {
     setPlaying(false);
     setScreens((ss) =>
       ss.map((s) => {
         if (s.id !== id) return s;
-        const next = { ...s, ...change };
+        if (s.mediaType === "video" && Number.isFinite(s.sourceDuration)) {
+          return {
+            ...updateVideoTiming(s, change, maxReelDuration),
+            ...(change.fit != null ? { fitManuallySet: true } : {}),
+          };
+        }
+        const next = {
+          ...s,
+          ...change,
+          ...(change.fit != null ? { fitManuallySet: true } : {}),
+        };
         if (
           s.sourceDuration &&
           (change.start != null || change.end != null) &&
@@ -199,6 +401,8 @@ export default function ScreenStudio() {
   };
   useEffect(
     () => () => {
+      audioPreview.current?.pause();
+      audioElements.current.forEach((element) => element.pause());
       urls.current.forEach((u) => URL.revokeObjectURL(u));
     },
     [],
@@ -214,6 +418,13 @@ export default function ScreenStudio() {
             draft.screens.map(async (stored) => {
               const screen = {
                 ...stored,
+                mediaType: stored.mediaType || "image",
+                fit:
+                  stored.mediaType === "video" &&
+                  !stored.fitManuallySet &&
+                  stored.fit === "cover"
+                    ? "contain"
+                    : stored.fit || "cover",
                 animation: normalizeAnimation(
                   stored.animation || createAnimation("static"),
                 ),
@@ -221,19 +432,40 @@ export default function ScreenStudio() {
               if (!screen.file) return screen;
               const src = URL.createObjectURL(screen.file);
               urls.current.add(src);
-              const im = new Image();
-              im.src = src;
-              await im.decode();
-              images.current.set(screen.id, im);
-              return { ...screen, src };
+              const visual = await loadScreenVisual(src, screen.mediaType);
+              if (screen.mediaType === "video") attachVideoRedraw(visual);
+              images.current.set(screen.id, visual);
+              return {
+                ...screen,
+                src,
+                sourceWidth: screen.sourceWidth ?? visual.videoWidth,
+                sourceHeight: screen.sourceHeight ?? visual.videoHeight,
+              };
             }),
           );
           if (!active) return;
           setScreens(restored);
           nextScreenId.current =
             Math.max(0, ...restored.map((screen) => screen.id)) + 1;
+          const restoredAudioClips = draft.audioClips?.length
+            ? draft.audioClips
+            : draft.audio
+              ? [{
+                  ...draft.audio,
+                  id: 1,
+                  start: draft.audioStart ?? draft.audio.start ?? 0,
+                  trimStart: draft.audio.trimStart ?? 0,
+                  trimEnd: draft.audio.trimEnd ?? 0,
+                  repeatToEnd: draft.audio.repeatToEnd ?? true,
+                  volume: draft.volume ?? draft.audio.volume ?? 1,
+                }]
+              : [];
+          const restoredAudioStart = Math.max(
+            0,
+            ...restoredAudioClips.map((clip) => clip.start || 0),
+          );
           const restoredMaxDuration = Math.max(
-            requiredDraftDuration(restored, draft.audioStart),
+            requiredDraftDuration(restored, restoredAudioStart),
             Number.isFinite(draft.maxReelDuration) && draft.maxReelDuration > 0
               ? draft.maxReelDuration
               : DEFAULT_MAX_DURATION,
@@ -285,9 +517,47 @@ export default function ScreenStudio() {
           setDefaultExit(
             styles.includes(draft.defaultExit) ? draft.defaultExit : "None",
           );
-          if(draft.audio?.file){const src=URL.createObjectURL(draft.audio.file);urls.current.add(src);setAudio({...draft.audio,src})}
-          setAudioStart(draft.audioStart??0);setVolume(draft.volume??1);setFormat(draft.format||'mp4');
-          notify("Your saved reel draft has been restored.", "success");
+          let missingAudioTracks = 0;
+          const audioWithUrls = restoredAudioClips.flatMap((clip, index) => {
+            const duration = Number(clip.duration);
+            if (!clip.file || !Number.isFinite(duration) || duration <= 0) {
+              missingAudioTracks += 1;
+              return [];
+            }
+            const id = Number.isInteger(clip.id) ? clip.id : index + 1;
+            nextAudioId.current = Math.max(nextAudioId.current, id + 1);
+            const src = URL.createObjectURL(clip.file);
+            urls.current.add(src);
+            const maxTrim = Math.max(0, duration - 0.1);
+            const trimStart = Math.min(
+              maxTrim,
+              Math.max(0, Number(clip.trimStart) || 0),
+            );
+            const trimEnd = Math.min(
+              Math.max(0, maxTrim - trimStart),
+              Math.max(0, Number(clip.trimEnd) || 0),
+            );
+            return [{
+              ...clip,
+              id,
+              src,
+              name: clip.name || clip.file.name,
+              duration,
+              start: clampDraftSetting(clip.start, 0, 0, restoredMaxDuration),
+              trimStart,
+              trimEnd,
+              repeatToEnd: clip.repeatToEnd ?? false,
+              volume: clampDraftSetting(clip.volume, 1, 0, 1),
+            }];
+          });
+          setAudioClips(audioWithUrls);
+          setFormat(draft.format||'mp4');
+          notify(
+            missingAudioTracks
+              ? `${missingAudioTracks} saved audio track(s) could not be restored. Upload those files again.`
+              : "Your saved reel draft has been restored.",
+            missingAudioTracks ? "error" : "success",
+          );
         }
         setDraftReady(true);
       } catch {
@@ -304,7 +574,7 @@ export default function ScreenStudio() {
     };
   }, []);
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || canvasEditing) return;
     if (skipNextDraftSave.current) {
       skipNextDraftSave.current = false;
       return;
@@ -312,9 +582,7 @@ export default function ScreenStudio() {
     const version = ++saveVersion.current;
     const snapshot=draftSnapshot({
       screens,
-      audio,
-      audioStart,
-      volume,
+      audioClips,
       format,
       reducedMotion,
       autoOverlap,
@@ -340,7 +608,7 @@ export default function ScreenStudio() {
           setDraftStatus("Draft save failed — device storage may be full");
       },
     );
-  }, [draftReady,screens,audio,audioStart,volume,format,reducedMotion,autoOverlap,maxScreens,maxReelDuration,maxScreenDuration,maxMotionDuration,maxOverlayDuration,defaultEntry,defaultExit]);
+  }, [draftReady,canvasEditing,screens,audioClips,format,reducedMotion,autoOverlap,maxScreens,maxReelDuration,maxScreenDuration,maxMotionDuration,maxOverlayDuration,defaultEntry,defaultExit]);
   async function discardDraft() {
     if (!window.confirm("Clear this draft and all uploaded screens and audio?"))
       return;
@@ -351,11 +619,25 @@ export default function ScreenStudio() {
       await clearScreenDraft();
       skipNextDraftSave.current = true;
       images.current.clear();
+      audioClips.forEach((clip) => {
+        if (clip.src?.startsWith("blob:")) {
+          URL.revokeObjectURL(clip.src);
+          urls.current.delete(clip.src);
+        }
+      });
       setScreens([makeScreen(0)]);
       setExpandedScreenFields({});
       nextScreenId.current = 2;
 
-      setAudio(null);setAudioStart(0);setVolume(1);setFormat("mp4");
+      audioPreview.current?.pause();
+      audioPreview.current = null;
+      audioElements.current.forEach((element) => element.pause());
+      audioElements.current.clear();
+      setAudioClips([]);
+      setPreviewingAudioId(null);
+      setAudioPreviewPositions({});
+      nextAudioId.current = 1;
+      setFormat("mp4");
       setReducedMotion(
         window.matchMedia("(prefers-reduced-motion: reduce)").matches,
       );
@@ -382,7 +664,33 @@ export default function ScreenStudio() {
     }
   }
 
-  function draw(ctx, t, list) {
+  function draw(ctx, t, list, playVideos = playing) {
+    list.forEach((screen) => {
+      if (screen.mediaType !== "video") return;
+      const video = images.current.get(screen.id);
+      if (!(video instanceof HTMLVideoElement)) return;
+      const isActive = t >= screen.start && t < screen.end;
+      const sourceTime = Math.min(
+        screen.sourceDuration - (screen.trimOut || 0),
+        (screen.trimIn || 0) + Math.max(0, t - screen.start),
+      );
+      if (playVideos && isActive) {
+        if (video.paused) {
+          if (Math.abs(video.currentTime - sourceTime) > 0.12)
+            video.currentTime = sourceTime;
+          video.play().catch(() => {
+            setPlaying(false);
+            notify(`Could not play video ${screen.name}. Please replace the file.`, "error");
+          });
+        } else if (Math.abs(video.currentTime - sourceTime) > 0.4) {
+          video.currentTime = sourceTime;
+        }
+      } else {
+        video.pause();
+        if (Math.abs(video.currentTime - sourceTime) > 0.04)
+          video.currentTime = sourceTime;
+      }
+    });
     const motionLimitedScreens = list.map((screen) => ({
       ...screen,
       transition: screenMotionDuration(screen, maxMotionDuration),
@@ -395,48 +703,499 @@ export default function ScreenStudio() {
       { reducedMotion },
     );
   }
+  function drawSelection(ctx, t, list) {
+    const selected = list.find((screen) => screen.id === selectedScreenId);
+    const media = selected && images.current.get(selected.id);
+    if (
+      !selected?.src ||
+      !media ||
+      t < selected.start ||
+      t > selected.end ||
+      (media.videoWidth && media.readyState < 2)
+    )
+      return;
+    const geometry = evaluateClip(
+      { ...selected, transition: screenMotionDuration(selected, maxMotionDuration) },
+      media,
+      t,
+      { reducedMotion },
+    );
+    const corners = transformedCorners(geometry);
+    ctx.save();
+    ctx.beginPath();
+    corners.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = "#e4c9ff";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const handle = corners[2];
+    ctx.beginPath();
+    ctx.arc(handle.x, handle.y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#9c79c3";
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+  function canvasPoint(event) {
+    const rect = canvas.current.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 360,
+      y: ((event.clientY - rect.top) / rect.height) * 640,
+    };
+  }
+  function onCanvasPointerDown(event) {
+    if (exporting || !draftReady) return;
+    const point = canvasPoint(event);
+    const selected = screens.find((screen) => screen.id === selectedScreenId);
+    const selectedMedia = selected && images.current.get(selected.id);
+    const selectedGeometry =
+      selectedMedia && time >= selected.start && time <= selected.end
+        ? evaluateClip(
+            { ...selected, transition: screenMotionDuration(selected, maxMotionDuration) },
+            selectedMedia,
+            time,
+            { reducedMotion },
+          )
+        : null;
+    const resizeHandle = selectedGeometry
+      ? transformedCorners(selectedGeometry)[2]
+      : null;
+    let hit = null;
+    let mode = "move";
+    if (
+      resizeHandle &&
+      Math.hypot(point.x - resizeHandle.x, point.y - resizeHandle.y) <= 14
+    ) {
+      hit = selected;
+      mode = "resize";
+    } else {
+      for (const screen of [...screens].reverse()) {
+        const media = images.current.get(screen.id);
+        if (!screen.src || !media || time < screen.start || time > screen.end)
+          continue;
+        const geometry = evaluateClip(
+          { ...screen, transition: screenMotionDuration(screen, maxMotionDuration) },
+          media,
+          time,
+          { reducedMotion },
+        );
+        if (pointInPolygon(point, transformedCorners(geometry))) {
+          hit = screen;
+          break;
+        }
+      }
+    }
+    if (!hit) {
+      hit =
+        [...screens].reverse().find(
+          (screen) =>
+            screen.src && time >= screen.start && time <= screen.end,
+        ) || null;
+    }
+    if (!hit) {
+      setSelectedScreenId(null);
+      return;
+    }
+    setPlaying(false);
+    selectScreen(hit.id);
+    const media = images.current.get(hit.id);
+    const geometry = evaluateClip(
+      { ...hit, transition: screenMotionDuration(hit, maxMotionDuration) },
+      media,
+      time,
+      { reducedMotion },
+    );
+    canvasDrag.current = {
+      id: hit.id,
+      mode,
+      pointerId: event.pointerId,
+      start: point,
+      center: { x: geometry.x, y: geometry.y },
+      initialDistance: Math.max(1, Math.hypot(point.x - geometry.x, point.y - geometry.y)),
+      transform: customTransformFor(hit, media, time, { reducedMotion }),
+      moved: false,
+    };
+    if (event.isTrusted) canvas.current.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function onCanvasPointerMove(event) {
+    const drag = canvasDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const point = canvasPoint(event);
+    const dx = point.x - drag.start.x;
+    const dy = point.y - drag.start.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 2) return;
+    drag.moved = true;
+    setCanvasEditing(true);
+    setPlaying(false);
+    setScreens((current) =>
+      current.map((screen) => {
+        if (screen.id !== drag.id) return screen;
+        if (drag.mode === "resize") {
+          const distance = Math.max(
+            1,
+            Math.hypot(point.x - drag.center.x, point.y - drag.center.y),
+          );
+          return {
+            ...screen,
+            fit: "custom",
+            fitManuallySet: true,
+            ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+            customTransform: {
+              ...drag.transform,
+              scale: Math.max(
+                0.1,
+                Math.min(8, drag.transform.scale * (distance / drag.initialDistance)),
+              ),
+            },
+          };
+        }
+        return {
+          ...screen,
+          fit: "custom",
+          fitManuallySet: true,
+          ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+          customTransform: {
+            ...drag.transform,
+            x: drag.transform.x + dx,
+            y: drag.transform.y + dy,
+          },
+        };
+      }),
+    );
+  }
+  function onCanvasPointerUp(event) {
+    if (canvasDrag.current?.pointerId !== event.pointerId) return;
+    canvasDrag.current = null;
+    setCanvasEditing(false);
+  }
+  function onCanvasKeyDown(event) {
+    if (!selectedScreenId || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key))
+      return;
+    if (!images.current.get(selectedScreenId)) return;
+    event.preventDefault();
+    const distance = event.shiftKey ? 0.05 : 2;
+    setScreens((current) =>
+      current.map((screen) => {
+        if (screen.id !== selectedScreenId) return screen;
+        const transform = screen.customTransform || { scale: 1, x: 0, y: 0 };
+        const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+        const customTransform =
+          screen.fit === "custom"
+            ? transform
+            : customTransformFor(
+                screen,
+                images.current.get(screen.id),
+                time,
+                { reducedMotion },
+              );
+        if (event.shiftKey) {
+          return {
+            ...screen,
+            fit: "custom",
+            fitManuallySet: true,
+            ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+            customTransform: {
+              ...customTransform,
+              scale: Math.max(0.1, Math.min(8, customTransform.scale + direction * distance)),
+            },
+          };
+        }
+        return {
+          ...screen,
+          fit: "custom",
+          fitManuallySet: true,
+          ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
+          customTransform: {
+            ...customTransform,
+            x: customTransform.x + (event.key === "ArrowLeft" ? -distance : event.key === "ArrowRight" ? distance : 0),
+            y: customTransform.y + (event.key === "ArrowUp" ? -distance : event.key === "ArrowDown" ? distance : 0),
+          },
+        };
+      }),
+    );
+  }
   useEffect(() => {
-    draw(canvas.current.getContext("2d"), time, screens);
-  }, [time, screens, playing, reducedMotion, maxMotionDuration]);
+    const ctx = canvas.current.getContext("2d");
+    draw(ctx, time, screens);
+    drawSelection(ctx, time, screens);
+  }, [time, screens, playing, reducedMotion, maxMotionDuration, selectedScreenId]);
   useEffect(()=>{
     if(!playing)return;const start=performance.now()-time*1000;let raf;
     function tick(){const t=Math.min(live.current.duration,(performance.now()-start)/1000);setTime(Math.min(live.current.duration,Math.floor(t*30)/30));if(t>=live.current.duration)setPlaying(false);else raf=requestAnimationFrame(tick)}
     raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf)
   },[playing]);
   useEffect(()=>{
-    const el=sound.current;if(!el||!audio)return;el.volume=volume;const relative=time-audioStart;
-    if(playing&&relative>=0&&relative<audio.duration){if(el.paused||Math.abs(el.currentTime-relative)>.25){el.currentTime=relative;el.play().catch(()=>{setPlaying(false);notify('Audio playback failed. Please replace the audio file.','error')})}}else el.pause()
-  },[playing,time,audio,audioStart,volume]);
-  async function upload(file, id) {
-    if (!file) return;
-    try {
-      if (!file.type.startsWith("image/")) throw Error("Choose an image file.");
-      const url = URL.createObjectURL(file);
-      urls.current.add(url);
-      const im = new Image();
-      im.src = url;
-      await im.decode();
-      images.current.set(id, im);
-      update(id, { src: url, file, name: file.name });
-      const target = live.current.screens.find((s) => s.id === id);
-      if (target) {
-        setTime(target.start);
-
+    audioClips.forEach((clip) => {
+      const el = audioElements.current.get(clip.id);
+      if (!el) return;
+      el.volume = clip.volume ?? 1;
+      el.loop =
+        (clip.trimStart ?? 0) === 0 &&
+        (clip.trimEnd ?? 0) === 0 &&
+        audioShouldLoop(
+          clip.duration,
+          duration,
+          clip.start,
+          0,
+          0,
+          clip.repeatToEnd,
+        );
+      const position = audioPlaybackPosition(
+        time,
+        clip.start,
+        clip.duration,
+        clip.trimStart ?? 0,
+        clip.trimEnd ?? 0,
+        clip.repeatToEnd,
+      );
+      if (playing && position !== null && time < duration) {
+        if (el.paused || Math.abs(el.currentTime - position) > .25) {
+          el.currentTime = position;
+          el.play().catch(() => {
+            setPlaying(false);
+            notify(`Audio playback failed for ${clip.name}. Please replace the file.`, "error");
+          });
+        }
+      } else {
+        el.pause();
       }
-      notify("Screen uploaded. Adjust its timing and animations below.", "success");
+    });
+  },[playing,time,audioClips,duration]);
+  async function upload(file, id, targetOverride) {
+    if (!file) return;
+    const mediaType = inferMediaType(file);
+    if (!mediaType) {
+      notify("Choose an image or video file.", "error");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    urls.current.add(url);
+    try {
+      const target =
+        targetOverride || live.current.screens.find((s) => s.id === id);
+      if (!target) throw Error("This screen is no longer available. Add a screen and try again.");
+      const visual = await loadScreenVisual(url, mediaType);
+      const mediaDetails =
+        mediaType === "video"
+          ? {
+              ...videoTimingFromSource(
+                target.start,
+                visual.duration,
+                maxReelDuration,
+              ),
+              mediaType,
+              sourceWidth: visual.videoWidth,
+              sourceHeight: visual.videoHeight,
+              fit: target.mediaType === "video" ? target.fit : "contain",
+            }
+          : {
+              mediaType,
+              sourceDuration: undefined,
+              trimIn: undefined,
+              trimOut: undefined,
+              sourceWidth: undefined,
+              sourceHeight: undefined,
+            };
+      if (mediaType === "video") attachVideoRedraw(visual);
+      releaseScreenVisual(target);
+      images.current.set(id, visual);
+      setPlaying(false);
+      setScreens((current) =>
+        current.map((screen) =>
+          screen.id === id
+            ? {
+                ...screen,
+                ...mediaDetails,
+                src: url,
+                file,
+                name: file.name,
+              }
+            : screen,
+        ),
+      );
+      setTime(mediaDetails.start ?? target.start);
+      notify(
+        mediaType === "video"
+          ? `Video added. Its ${visual.duration.toFixed(1)}s duration set the screen timing; trim it to fit the reel if needed.`
+          : "Image uploaded. Its existing screen timing is unchanged.",
+        "success",
+      );
     } catch (e) {
+      URL.revokeObjectURL(url);
+      urls.current.delete(url);
       notify(e.message, "error");
     }
   }
-  async function addAudio(file){
-    if(!file)return;const url=URL.createObjectURL(file);urls.current.add(url);const el=new Audio(url);
-    el.onloadedmetadata=()=>{setPlaying(false);setAudio({src:url,file,name:file.name,duration:el.duration})};el.onerror=()=>notify('Could not read this audio file. Try MP3 or WAV.','error')
+  function addAudio(file) {
+    if (!file) return;
+    if (file.type && !file.type.startsWith("audio/")) {
+      notify("Choose an audio file.", "error");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    urls.current.add(url);
+    const probe = new Audio(url);
+    probe.onloadedmetadata = () => {
+      if (!Number.isFinite(probe.duration) || probe.duration <= 0) {
+        URL.revokeObjectURL(url);
+        urls.current.delete(url);
+        notify(`Could not read the duration of ${file.name}. Try MP3 or WAV.`, "error");
+        return;
+      }
+      const id = nextAudioId.current++;
+      probe.onloadedmetadata = null;
+      probe.onerror = null;
+      setAudioClips((clips) => [
+        ...clips,
+        {
+          id,
+          src: url,
+          file,
+          name: file.name,
+          duration: probe.duration,
+          start: 0,
+          trimStart: 0,
+          trimEnd: 0,
+          repeatToEnd: true,
+          volume: 1,
+        },
+      ]);
+      setPlaying(false);
+      notify(`${file.name} added as an audio track.`, "success");
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      urls.current.delete(url);
+      notify(`Could not read ${file.name}. Try MP3 or WAV.`, "error");
+    };
+    probe.preload = "metadata";
+  }
+  function updateAudioClip(id, changes) {
+    setAudioClips((clips) =>
+      clips.map((clip) => {
+        if (clip.id !== id) return clip;
+        const next = { ...clip, ...changes };
+        const maxTrim = Math.max(0, clip.duration - 0.1);
+        next.trimStart = Math.min(maxTrim, Math.max(0, Number(next.trimStart) || 0));
+        next.trimEnd = Math.min(
+          Math.max(0, maxTrim - next.trimStart),
+          Math.max(0, Number(next.trimEnd) || 0),
+        );
+        next.start = Math.max(0, Math.min(maxReelDuration, Number(next.start) || 0));
+        next.volume = Math.max(0, Math.min(1, Number(next.volume) || 0));
+        return next;
+      }),
+    );
+    if (
+      previewingAudioId === id &&
+      (changes.trimStart !== undefined || changes.trimEnd !== undefined)
+    ) {
+      const preview = audioPreview.current;
+      const start = changes.trimStart ?? clip.trimStart ?? 0;
+      const end = clip.duration - (changes.trimEnd ?? clip.trimEnd ?? 0);
+      const position = Math.min(end, Math.max(start, preview?.currentTime ?? start));
+      preview?.pause();
+      audioPreview.current = null;
+      setPreviewingAudioId(null);
+      setAudioPreviewPositions((positions) => ({ ...positions, [id]: position }));
+    }
+    if (previewingAudioId === id && changes.volume !== undefined) {
+      if (audioPreview.current) {
+        audioPreview.current.volume = Math.max(0, Math.min(1, changes.volume));
+      }
+    }
+  }
+  function removeAudioClip(clip) {
+    if (previewingAudioId === clip.id) {
+      audioPreview.current?.pause();
+      audioPreview.current = null;
+      setPreviewingAudioId(null);
+    }
+    audioElements.current.get(clip.id)?.pause();
+    audioElements.current.delete(clip.id);
+    if (clip.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(clip.src);
+      urls.current.delete(clip.src);
+    }
+    setAudioPreviewPositions((positions) => {
+      const next = { ...positions };
+      delete next[clip.id];
+      return next;
+    });
+    setPlaying(false);
+    setAudioClips((clips) => clips.filter((item) => item.id !== clip.id));
+  }
+  async function toggleAudioPreview(clip) {
+    if (previewingAudioId === clip.id) {
+      audioPreview.current?.pause();
+      audioPreview.current = null;
+      setPreviewingAudioId(null);
+      return;
+    }
+    audioPreview.current?.pause();
+    const preview = new Audio(clip.src);
+    audioPreview.current = preview;
+    preview.volume = clip.volume ?? 1;
+    preview.onloadedmetadata = async () => {
+      if (audioPreview.current !== preview) return;
+      const end = clip.duration - (clip.trimEnd ?? 0);
+      const savedPosition = audioPreviewPositions[clip.id] ?? clip.trimStart ?? 0;
+      const position = Math.min(end, Math.max(clip.trimStart ?? 0, savedPosition));
+      preview.currentTime = position;
+      setAudioPreviewPositions((positions) => ({ ...positions, [clip.id]: position }));
+      try {
+        await preview.play();
+        setPreviewingAudioId(clip.id);
+      } catch {
+        if (audioPreview.current !== preview) return;
+        setPreviewingAudioId(null);
+        notify(`Could not play ${clip.name}. Try replacing the audio file.`, "error");
+      }
+    };
+    preview.ontimeupdate = () => {
+      if (audioPreview.current !== preview) return;
+      const end = clip.duration - (clip.trimEnd ?? 0);
+      if (preview.currentTime >= end) {
+        preview.pause();
+        audioPreview.current = null;
+        setPreviewingAudioId(null);
+        setAudioPreviewPositions((positions) => ({ ...positions, [clip.id]: clip.trimStart ?? 0 }));
+      } else {
+        setAudioPreviewPositions((positions) => ({ ...positions, [clip.id]: preview.currentTime }));
+      }
+    };
+    preview.onerror = () => {
+      if (audioPreview.current !== preview) return;
+      setPreviewingAudioId(null);
+      notify(`Could not play ${clip.name}. Try replacing the audio file.`, "error");
+    };
+    setPlaying(false);
+    setPreviewingAudioId(clip.id);
+  }
+  function seekAudioPreview(clip, value) {
+    const end = clip.duration - (clip.trimEnd ?? 0);
+    const position = Math.min(end, Math.max(clip.trimStart ?? 0, value));
+    setAudioPreviewPositions((positions) => ({ ...positions, [clip.id]: position }));
+    if (audioPreview.current && previewingAudioId === clip.id) {
+      audioPreview.current.currentTime = position;
+    }
   }
   async function exportVideo() {
     setPlaying(false);
+    audioPreview.current?.pause();
+    audioPreview.current = null;
+    setPreviewingAudioId(null);
     setExporting(true);
     setTime(0);
-    let stream, ctx, source, silence, rec;
+    let stream, ctx, sources = [], silence, rec;
     try {
       if (format === "mp4") {
         const { renderScreenMp4 } = await import("./screen-offline-export");
@@ -447,9 +1206,7 @@ export default function ScreenStudio() {
           })),
           images: images.current,
           duration,
-          audio,
-          audioStart,
-          volume,
+          audioClips,
           reducedMotion,
           onProgress: setExportStatus,
         });
@@ -472,7 +1229,7 @@ export default function ScreenStudio() {
       const render = (t) => {
         c.save();
         c.scale(SCREEN_EXPORT.width / 360, SCREEN_EXPORT.height / 640);
-        draw(c, t, screens);
+        draw(c, t, screens, true);
         c.restore();
         stream?.getVideoTracks()[0]?.requestFrame?.();
       };
@@ -485,7 +1242,31 @@ export default function ScreenStudio() {
       silence.offset.value = 0;
       silence.connect(dest);
       silence.start();
-      if(audio){const response=await fetch(audio.src),buffer=await ctx.decodeAudioData(await response.arrayBuffer());source=ctx.createBufferSource();source.buffer=buffer;const gain=ctx.createGain();gain.gain.value=volume;source.connect(gain);gain.connect(dest)}
+      for (const clip of audioClips) {
+        if (clip.start >= duration) continue;
+        const response = await fetch(clip.src);
+        if (!response.ok) throw Error(`Could not read the audio track ${clip.name}.`);
+        const buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        const trimStart = clip.trimStart ?? 0;
+        const trimEnd = clip.trimEnd ?? 0;
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        source.buffer = buffer;
+        source.loop = audioShouldLoop(
+          buffer.duration,
+          duration,
+          clip.start,
+          trimStart,
+          trimEnd,
+          clip.repeatToEnd,
+        );
+        source.loopStart = trimStart;
+        source.loopEnd = buffer.duration - trimEnd;
+        gain.gain.value = clip.volume ?? 1;
+        source.connect(gain);
+        gain.connect(dest);
+        sources.push({ source, clip, trimStart });
+      }
       dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
       const chunks = [];
       rec = new MediaRecorder(stream, {
@@ -502,7 +1283,15 @@ export default function ScreenStudio() {
       });
       const start = ctx.currentTime;
       rec.start(250);
-      source?.start(start+audioStart);
+      sources.forEach(({ source, clip, trimStart }) => {
+        const remaining = duration - clip.start;
+        const playable = source.buffer.duration - trimStart - (clip.trimEnd ?? 0);
+        source.start(
+          start + clip.start,
+          trimStart,
+          source.loop ? remaining : Math.min(remaining, playable),
+        );
+      });
       await new Promise((resolve) => {
         function frame() {
           const t = Math.min(duration, ctx.currentTime - start);
@@ -532,7 +1321,7 @@ export default function ScreenStudio() {
     } finally {
       if (rec?.state === "recording") rec.stop();
       try {
-        source?.stop();
+        sources.forEach(({ source }) => source.stop());
         silence?.stop();
       } catch {}
       stream?.getTracks().forEach((t) => t.stop());
@@ -560,10 +1349,12 @@ export default function ScreenStudio() {
           {exporting ? exportStatus : "Export video with audio"}
         </button>
       </header>
-      <div className="screen-layout">
+      <div
+        className={`screen-layout${activeTab === "Prompts" ? " screen-layout-prompts" : ""}`}
+      >
         <section className="screen-editor">
           <div className="screen-tabs" role="tablist" aria-label="Editor sections">
-            {["Screen", "Audio", "Settings", "Timeline"].map((tab, index, tabs) => (
+            {["Screen", "Audio", "Settings", "Timeline", "Prompts"].map((tab, index, tabs) => (
               <button
                 key={tab}
                 id={`screen-tab-${tab.toLowerCase()}`}
@@ -601,7 +1392,7 @@ export default function ScreenStudio() {
             tabIndex={0}
             hidden={activeTab !== "Screen"}
           >
-          <div className="screen-intro"><span className="eyebrow">IMAGE TO REEL</span><h1>Your screens. Your timeline.</h1><button
+          <div className="screen-intro"><span className="eyebrow">IMAGE & VIDEO TO REEL</span><h1>Your screens. Your timeline.</h1><button
                 className="primary"
                   disabled={!draftReady || exporting || screens.length >= maxScreens}
                   onClick={() => {
@@ -623,10 +1414,10 @@ export default function ScreenStudio() {
                   Add screen ({screens.length}/{maxScreens})
               </button>{" "}
               <label className="screen-upload">
-                Upload multiple screens
+                Upload images or videos
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   disabled={!draftReady || exporting}
                   onChange={(e) => {
@@ -651,7 +1442,7 @@ export default function ScreenStudio() {
                       .map((screen) => screen.id);
                     setScreens(next);
                     files.forEach((file, index) =>
-                      upload(file, targetIds[index]),
+                      upload(file, targetIds[index], next[index]),
                     );
                     if (selectedFiles.length > files.length) {
                       notify(
@@ -665,11 +1456,12 @@ export default function ScreenStudio() {
               </label>
               </div>
           <fieldset disabled={!draftReady || exporting}>
-            <legend>Screen layers · drag the handle to reorder · times stay unchanged</legend>
+            <legend>Screen layers · images keep their timing; video duration sets its timing · drag to reorder</legend>
             {screens.map((s, position) => (
               <article
                 className={
                   "screen-row" +
+                  (selectedScreenId === s.id ? " screen-row-selected" : "") +
                   (draggedScreen === s.id ? " screen-dragging" : "") +
                   (dropScreen === s.id ? " screen-drop-target" : "")
                 }
@@ -723,14 +1515,25 @@ export default function ScreenStudio() {
                 </div>
                 <label className="screen-thumb">
                   {s.src ? (
-                    <img src={s.src} alt={`Screen ${s.id}`} />
+                    s.mediaType === "video" ? (
+                      <video
+                        src={s.src}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                      />
+                    ) : (
+                      <img src={s.src} alt={`Screen ${s.id}`} />
+                    )
                   ) : (
                     <span>+ Upload</span>
                   )}
                   <input
-                    aria-label={`Upload screen ${s.id}`}
+                    aria-label={`Upload image or video for screen ${s.id}`}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     onChange={(e) => {
                       upload(e.target.files[0], s.id);
                       e.target.value = "";
@@ -740,7 +1543,20 @@ export default function ScreenStudio() {
                 <div className="screen-fields">
                   <div className="screen-fields-header">
                     <strong>
-                      Screen {s.id} <small>{s.name || "No image uploaded"}</small>
+                      Screen {s.id}{" "}
+                      <button
+                        type="button"
+                        className="screen-select-preview"
+                        aria-pressed={selectedScreenId === s.id}
+                        onClick={() => selectScreen(s.id)}
+                      >
+                        {selectedScreenId === s.id ? "Selected" : "Select preview"}
+                      </button>{" "}
+                      <small>
+                        {s.name
+                          ? `${s.mediaType === "video" ? `Video${s.sourceWidth && s.sourceHeight ? ` · ${s.sourceWidth} × ${s.sourceHeight}px` : ""}` : "Image"} · ${s.name}`
+                          : "No media uploaded"}
+                      </small>
                     </strong>
                     <button
                       type="button"
@@ -761,14 +1577,44 @@ export default function ScreenStudio() {
                     </button>
                   </div>
                   <fieldset className="screen-control-group screen-time-group">
-                    <legend>Timeline</legend>
+                    <legend>
+                      {s.mediaType === "video"
+                        ? "Timeline · reel seconds"
+                        : "Timeline"}
+                    </legend>
                     <div className="screen-time-values">
-                      <span>
-                        Start <output>{s.start.toFixed(1)}s</output>
-                      </span>
-                      <span>
-                        End <output>{s.end.toFixed(1)}s</output>
-                      </span>
+                      {s.mediaType === "video" ? (
+                        <>
+                          <VideoTimelineField
+                            id={s.id}
+                            label="Start"
+                            value={s.start}
+                            min={0}
+                            max={Math.max(0, maxReelDuration - 0.1)}
+                            onChange={(start) => update(s.id, { start })}
+                          />
+                          <VideoTimelineField
+                            id={s.id}
+                            label="End"
+                            value={s.end}
+                            min={s.start + 0.1}
+                            max={Math.min(
+                              maxReelDuration,
+                              s.start + s.sourceDuration - (s.trimIn || 0),
+                            )}
+                            onChange={(end) => update(s.id, { end })}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <span>
+                            Start <output>{s.start.toFixed(1)}s</output>
+                          </span>
+                          <span>
+                            End <output>{s.end.toFixed(1)}s</output>
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div
                       className="screen-dual-range"
@@ -781,18 +1627,24 @@ export default function ScreenStudio() {
                         aria-label={`Screen ${s.id} start`}
                         type="range"
                         min="0"
-                        max={maxReelDuration}
+                        max={
+                          s.mediaType === "video"
+                            ? Math.max(0, maxReelDuration - 0.1)
+                            : maxReelDuration
+                        }
                         aria-valuemin="0"
-                        aria-valuemax={Math.max(0, +(s.end - 0.1).toFixed(1))}
+                        aria-valuemax={
+                          s.mediaType === "video"
+                            ? Math.max(0, maxReelDuration - 0.1)
+                            : Math.max(0, +(s.end - 0.1).toFixed(1))
+                        }
                         step=".1"
                         value={s.start}
                         aria-valuetext={`${s.start.toFixed(1)} seconds`}
                         onChange={(event) => {
-                          const start = Math.min(
-                            Number(event.target.value),
-                            s.end - 0.1,
-                          );
-                          update(s.id, { start: +start.toFixed(1) });
+                          update(s.id, {
+                            start: +Number(event.target.value).toFixed(1),
+                          });
                         }}
                       />
                       <input
@@ -801,7 +1653,14 @@ export default function ScreenStudio() {
                         min="0"
                         max={maxReelDuration}
                         aria-valuemin={+(s.start + 0.1).toFixed(1)}
-                        aria-valuemax={maxReelDuration}
+                        aria-valuemax={
+                          s.mediaType === "video"
+                            ? Math.min(
+                                maxReelDuration,
+                                s.start + s.sourceDuration - (s.trimIn || 0),
+                              )
+                            : maxReelDuration
+                        }
                         step=".1"
                         value={s.end}
                         aria-valuetext={`${s.end.toFixed(1)} seconds`}
@@ -814,6 +1673,45 @@ export default function ScreenStudio() {
                         }}
                       />
                     </div>
+                    {s.mediaType === "video" && (
+                      <fieldset className="screen-video-trim">
+                        <legend>
+                          Video crop · {(s.end - s.start).toFixed(1)}s selected of{" "}
+                          {s.sourceDuration.toFixed(1)}s
+                        </legend>
+                        <label>
+                          Crop in (source seconds)
+                          <input
+                            type="number"
+                            min="0"
+                            max={Math.max(
+                              0,
+                              s.sourceDuration - (s.trimOut || 0) - 0.1,
+                            )}
+                            step=".1"
+                            value={(s.trimIn || 0).toFixed(1)}
+                            onChange={(event) =>
+                              update(s.id, { trimIn: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Crop out (source seconds)
+                          <input
+                            type="number"
+                            min={(s.trimIn || 0) + 0.1}
+                            max={s.sourceDuration}
+                            step=".1"
+                            value={(s.sourceDuration - (s.trimOut || 0)).toFixed(1)}
+                            onChange={(event) =>
+                              update(s.id, {
+                                trimOut: s.sourceDuration - Number(event.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      </fieldset>
+                    )}
                   </fieldset>
                   <div
                     className="screen-extra-fields"
@@ -871,12 +1769,16 @@ export default function ScreenStudio() {
                       </div>
                     </fieldset>
                     <fieldset className="screen-control-group screen-fit-group">
-                      <legend>Image fit</legend>
+                      <legend>{s.mediaType === "video" ? "Video frame fit" : "Image fit"}</legend>
                       <div className="screen-fit-options">
                         {[
                           { value: "cover", label: "Fill frame, crop edges" },
-                          { value: "contain", label: "Fit whole image" },
+                          {
+                            value: "contain",
+                            label: s.mediaType === "video" ? "Fit whole video" : "Fit whole image",
+                          },
                           { value: "crop", label: "Custom crop" },
+                          { value: "custom", label: "Custom size and position" },
                         ].map((option) => (
                           <label
                             className="screen-fit-option"
@@ -887,9 +1789,9 @@ export default function ScreenStudio() {
                               type="radio"
                               name={`screen-${s.id}-fit`}
                               value={option.value}
-                              aria-label={`Screen ${s.id} image fit: ${option.label}`}
+                              aria-label={`Screen ${s.id} ${s.mediaType === "video" ? "video" : "image"} fit: ${option.label}`}
                               checked={s.fit === option.value}
-                              onChange={() => update(s.id, { fit: option.value })}
+                              onChange={() => setScreenFit(s, option.value)}
                             />
                             <svg
                               viewBox="0 0 24 24"
@@ -910,6 +1812,12 @@ export default function ScreenStudio() {
                               )}
                               {option.value === "crop" && (
                                 <path d="M8 4v12a2 2 0 0 0 2 2h10M4 8h12a2 2 0 0 1 2 2v10M8 8l8 8" />
+                              )}
+                              {option.value === "custom" && (
+                                <>
+                                  <rect x="5" y="5" width="14" height="14" rx="1" />
+                                  <path d="M5 10h14M10 5v14M2 2l4 4m16-4-4 4m4 16-4-4M2 22l4-4" />
+                                </>
                               )}
                             </svg>
                             <span className="screen-visually-hidden">{option.label}</span>
@@ -996,16 +1904,27 @@ export default function ScreenStudio() {
                       <button
                         className="remove-screen-image"
                         onClick={() => {
-                          images.current.delete(s.id);
-
-                          update(s.id, {
-                            src: null,
-                            file: null,
-                            name: null,
-                          });
+                          releaseScreenVisual(s);
+                          setPlaying(false);
+                          setScreens((current) =>
+                            current.map((screen) =>
+                              screen.id === s.id
+                                ? {
+                                    ...screen,
+                                    src: null,
+                                    file: null,
+                                    name: null,
+                                    mediaType: "image",
+                                    sourceDuration: undefined,
+                                    trimIn: undefined,
+                                    trimOut: undefined,
+                                  }
+                                : screen,
+                            ),
+                          );
                         }}
                       >
-                        Remove
+                        Remove media
                       </button>
                     )}
                     {screens.length > 1 && (
@@ -1033,68 +1952,153 @@ export default function ScreenStudio() {
             hidden={activeTab !== "Audio"}
           >
             <section className="screen-audio">
-                <h2>Audio layer</h2>
+                <h2>Audio tracks</h2>
+                <div className="screen-audio-help">
+                  Add multiple tracks, trim each one, and choose where it sits on the reel.
+                </div>
                 <label className="screen-upload">
-                  {audio?"Replace audio":"Upload audio"}
+                  Add audio tracks
                   <input
                     type="file"
                     accept="audio/*"
+                    multiple
                     disabled={!draftReady || exporting}
                     onChange={(e) => {
-                      addAudio(e.target.files[0]);
+                      Array.from(e.target.files).forEach(addAudio);
                       e.target.value = "";
                     }}
                   />
                 </label>
-                {audio && (
-                  <>
-                    <p>
-                      {audio.name} · {audio.duration.toFixed(1)}s
-                    </p>
-                    <label>
-                      Start (s)
-                      <input
-                        type="number"
-                        min="0"
-                        max={maxReelDuration}
-                        step=".1"
-                        disabled={!draftReady || exporting}
-                        value={audioStart}
-                        onChange={(e) => {
-                          const value = Number(e.target.value);
-                          if (
-                            Number.isFinite(value) &&
-                            value >= 0 &&
-                            value <= maxReelDuration
-                          ) {
-                            setAudioStart(value);
-                          }
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Volume {Math.round(volume * 100)}%
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step=".01"
-                        disabled={!draftReady || exporting}
-                        value={volume}
-                        onChange={(e) => setVolume(+e.target.value)}
-                      />
-                    </label>
-                    <button
-                      disabled={!draftReady || exporting}
-                      onClick={() => {
-                        setPlaying(false);
-                        setAudio(null);
-                      }}
-                    >
-                      Remove audio
-                    </button>
-                  </>
+                {!audioClips.length && (
+                  <div className="screen-audio-empty">
+                    No tracks yet. Choose one or more audio files to begin.
+                  </div>
                 )}
+                {audioClips.map((clip, index) => {
+                  const trimStart = clip.trimStart ?? 0;
+                  const trimEnd = clip.trimEnd ?? 0;
+                  const trimmedDuration = clip.duration - trimStart - trimEnd;
+                  const previewEnd = clip.duration - trimEnd;
+                  const previewPosition = Math.min(
+                    previewEnd,
+                    Math.max(
+                      trimStart,
+                      audioPreviewPositions[clip.id] ?? trimStart,
+                    ),
+                  );
+                  const isPreviewing = previewingAudioId === clip.id;
+                  return (
+                    <article className="screen-audio-clip" key={clip.id}>
+                      <div className="screen-audio-clip-heading">
+                        <div>
+                          <h3>Track {index + 1}</h3>
+                          <p>
+                            {clip.name} · {trimmedDuration.toFixed(1)}s selected of {clip.duration.toFixed(1)}s
+                            {audioShouldLoop(
+                              clip.duration,
+                              duration,
+                              clip.start,
+                              trimStart,
+                              trimEnd,
+                              clip.repeatToEnd,
+                            ) &&
+                              ` · Repeats to fill the remaining ${(duration - clip.start).toFixed(1)}s`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="screen-audio-remove"
+                          disabled={!draftReady || exporting}
+                          onClick={() => removeAudioClip(clip)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="screen-audio-clip-controls">
+                        <label>
+                          Start on reel (s)
+                          <input
+                            type="number"
+                            min="0"
+                            max={maxReelDuration}
+                            step=".1"
+                            disabled={!draftReady || exporting}
+                            value={clip.start}
+                            onChange={(event) => updateAudioClip(clip.id, { start: +event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          Crop in point (s)
+                          <input
+                            type="number"
+                            min="0"
+                            max={Math.max(0, clip.duration - trimEnd - .1)}
+                            step=".1"
+                            disabled={!draftReady || exporting}
+                            value={trimStart}
+                            onChange={(event) => updateAudioClip(clip.id, { trimStart: +event.target.value })}
+                          />
+                        </label>
+                        <label>
+                          Crop out point (s)
+                          <input
+                            type="number"
+                            min={trimStart + .1}
+                            max={clip.duration}
+                            step=".1"
+                            disabled={!draftReady || exporting}
+                            value={clip.duration - trimEnd}
+                            onChange={(event) => updateAudioClip(clip.id, { trimEnd: clip.duration - +event.target.value })}
+                          />
+                        </label>
+                        <label className="screen-audio-repeat">
+                          <input
+                            type="checkbox"
+                            disabled={!draftReady || exporting}
+                            checked={clip.repeatToEnd ?? false}
+                            onChange={(event) => updateAudioClip(clip.id, { repeatToEnd: event.target.checked })}
+                          />
+                          Repeat to end of reel
+                        </label>
+                        <label className="screen-audio-volume">
+                          Volume {Math.round((clip.volume ?? 1) * 100)}%
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step=".01"
+                            disabled={!draftReady || exporting}
+                            value={clip.volume ?? 1}
+                            onChange={(event) => updateAudioClip(clip.id, { volume: +event.target.value })}
+                          />
+                        </label>
+                      </div>
+                      <div className="screen-audio-preview">
+                        <button
+                          type="button"
+                          disabled={!draftReady || exporting}
+                          aria-label={`${isPreviewing ? "Pause" : "Play"} preview for ${clip.name}`}
+                          onClick={() => toggleAudioPreview(clip)}
+                        >
+                          {isPreviewing ? "Pause" : "Play"}
+                        </button>
+                        <label className="screen-audio-seek">
+                          <span className="screen-visually-hidden">{clip.name} preview timeline</span>
+                          <input
+                            type="range"
+                            min={trimStart}
+                            max={previewEnd}
+                            step=".01"
+                            disabled={!draftReady || exporting}
+                            value={Math.min(previewEnd, Math.max(trimStart, previewPosition))}
+                            onChange={(event) => seekAudioPreview(clip, +event.target.value)}
+                          />
+                        </label>
+                        <output>{previewPosition.toFixed(1)} / {previewEnd.toFixed(1)}s</output>
+                      </div>
+                    </article>
+                  );
+                })}
             </section>
           </section>
           <section
@@ -1325,7 +2329,7 @@ export default function ScreenStudio() {
                   />
                 </label>
                 <p>
-                  Shorten screen timings or move the audio start before lowering the limit.
+                  Shorten screen timings or move audio tracks earlier before lowering the limit.
                   Current minimum: {requiredDuration.toFixed(1)}s.
                 </p>
               </section>
@@ -1364,10 +2368,12 @@ export default function ScreenStudio() {
                   <span>{screen.id}</span>
                   <div className="screen-lane">
                     <button
+                      className={screen.mediaType === "video" ? "video-lane-clip" : undefined}
                       disabled={!screen.src || exporting}
                       aria-label={`Seek screen ${screen.id}`}
                       onClick={() => {
                         setPlaying(false);
+                        selectScreen(screen.id);
                         setTime(screen.start);
                       }}
                       style={{
@@ -1378,7 +2384,9 @@ export default function ScreenStudio() {
                         ) / maxReelDuration) * 100}%`,
                       }}
                     >
-                      {screen.src ? `${screen.start}–${screen.end}s` : ""}
+                      {screen.src
+                        ? `${screen.mediaType === "video" ? "Video · " : ""}${screen.start}–${screen.end}s`
+                        : ""}
                     </button>
                     <i
                       style={{
@@ -1388,32 +2396,69 @@ export default function ScreenStudio() {
                   </div>
                 </div>
               ))}
-              <div>
-                <span>Audio</span>
-                <div className="screen-lane audio-lane">
-                  {audio && audioStart < maxReelDuration && (
-                    <b
-                      style={{
-                        left: `${(audioStart / maxReelDuration) * 100}%`,
-                        width: `${(Math.min(audio.duration, maxReelDuration - audioStart) / maxReelDuration) * 100}%`,
-                      }}
-                    >
-                      Audio
-                    </b>
-                  )}
-                  <i
-                    style={{
-                      left: `${(time / maxReelDuration) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
+              {audioClips.map((clip, index) => {
+                const trimDuration = clip.duration - (clip.trimStart ?? 0) - (clip.trimEnd ?? 0);
+                const clipEnd = clip.repeatToEnd
+                  ? duration
+                  : Math.min(duration, clip.start + trimDuration);
+                return (
+                  <div key={clip.id}>
+                    <span>Audio {index + 1}</span>
+                    <div className="screen-lane audio-lane">
+                      {clip.start < duration && (
+                        <button
+                          type="button"
+                          aria-label={`Seek to ${clip.name} audio track start${clip.repeatToEnd ? ", repeats to the end of the reel" : ""}`}
+                          onClick={() => {
+                            setPlaying(false);
+                            setTime(clip.start);
+                          }}
+                          style={{
+                            left: `${Math.min((clip.start / maxReelDuration) * 100, 100)}%`,
+                            width: `${Math.max(0, (clipEnd - clip.start) / maxReelDuration * 100)}%`,
+                          }}
+                        >
+                          {clip.name}{clip.repeatToEnd ? " · repeats" : ""}
+                        </button>
+                      )}
+                      <i
+                        style={{
+                          left: `${(time / maxReelDuration) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </section>
+          <section
+            id="screen-panel-prompts"
+            className="screen-tab-panel"
+            role="tabpanel"
+            aria-labelledby="screen-tab-prompts"
+            tabIndex={0}
+            hidden={activeTab !== "Prompts"}
+          >
+            <PromptLibrary />
           </section>
         </section>
         <aside className="screen-preview">
           <h2>Reel preview <span>9:16</span></h2>
-          <canvas ref={canvas} width="360" height="640" aria-label="Screen reel preview"/>
+          <canvas
+            ref={canvas}
+            width="360"
+            height="640"
+            aria-label="Screen reel preview. Select a visible screen, drag to move it, or drag the lower-right handle to resize."
+            aria-describedby="screen-preview-edit-help"
+            tabIndex={0}
+            onPointerDown={onCanvasPointerDown}
+            onPointerMove={onCanvasPointerMove}
+            onPointerUp={onCanvasPointerUp}
+            onPointerCancel={onCanvasPointerUp}
+            onLostPointerCapture={onCanvasPointerUp}
+            onKeyDown={onCanvasKeyDown}
+          />
           <div className="screen-controls" role="group" aria-label="Reel preview controls">
             <button
               type="button"
@@ -1422,6 +2467,9 @@ export default function ScreenStudio() {
               title="Restart"
               disabled={!draftReady || exporting}
               onClick={() => {
+                audioPreview.current?.pause();
+                audioPreview.current = null;
+                setPreviewingAudioId(null);
                 setPlaying(false);
                 setTime(0);
               }}
@@ -1439,6 +2487,9 @@ export default function ScreenStudio() {
               disabled={!draftReady || exporting || !screens.some((s) => s.src)}
               onClick={() => {
                 if (!playing) {
+                  audioPreview.current?.pause();
+                  audioPreview.current = null;
+                  setPreviewingAudioId(null);
                   if (time >= duration) setTime(0);
                   setActiveTab("Timeline");
                 }
@@ -1459,6 +2510,11 @@ export default function ScreenStudio() {
               {time.toFixed(1)} / {duration.toFixed(1)}s
             </output>
           </div>
+          <p id="screen-preview-edit-help" className="screen-preview-edit-help">
+            {selectedScreenId
+              ? `Screen ${selectedScreenId} selected · drag to move · drag the lower-right handle to resize · arrow keys move · Shift + arrows resize`
+              : "Click a visible image or video to select it. Choose Custom to resize and move it in the preview."}
+          </p>
             <p>
               1080 × 1920 · 9:16 · 30 FPS
               <br />
@@ -1503,7 +2559,17 @@ export default function ScreenStudio() {
           </button>
         </div>
       )}
-      {audio&&<audio ref={sound} src={audio.src}/>}
+      {audioClips.map((clip) => (
+        <audio
+          key={clip.id}
+          ref={(element) => {
+            if (element) audioElements.current.set(clip.id, element);
+            else audioElements.current.delete(clip.id);
+          }}
+          src={clip.src}
+          preload="metadata"
+        />
+      ))}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import coreURL from "@ffmpeg/core?url";
 import wasmURL from "@ffmpeg/core/wasm?url";
 import { renderReelFrame } from "./cinematic";
 import { SCREEN_EXPORT } from "./screen-export";
+import { audioShouldLoop } from "./audio-loop";
 
 // PCM WAV is accepted consistently by the encoder, regardless of the uploaded codec.
 export function pcmWave(buffer) {
@@ -43,18 +44,90 @@ export function pcmWave(buffer) {
     }
   return new Uint8Array(bytes);
 }
-async function audioWave(audio,audioStart,volume,duration){
- const context=new OfflineAudioContext(2,Math.ceil(duration*48000),48000);
- if(audio&&audioStart<duration){const response=await fetch(audio.src);if(!response.ok)throw Error('Could not read the audio layer.');const buffer=await context.decodeAudioData(await response.arrayBuffer()),source=context.createBufferSource(),gain=context.createGain();source.buffer=buffer;gain.gain.value=volume;source.connect(gain);gain.connect(context.destination);source.start(audioStart)}
- return pcmWave(await context.startRendering());
+async function audioWave(audioClips, duration) {
+  const context = new OfflineAudioContext(2, Math.ceil(duration * 48000), 48000);
+  for (const clip of audioClips) {
+    if (clip.start >= duration) continue;
+    const response = await fetch(clip.src);
+    if (!response.ok) throw Error(`Could not read the audio track ${clip.name}.`);
+    const buffer = await context.decodeAudioData(await response.arrayBuffer());
+    const trimStart = clip.trimStart ?? 0;
+    const trimEnd = clip.trimEnd ?? 0;
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = audioShouldLoop(
+      buffer.duration,
+      duration,
+      clip.start,
+      trimStart,
+      trimEnd,
+      clip.repeatToEnd,
+    );
+    source.loopStart = trimStart;
+    source.loopEnd = buffer.duration - trimEnd;
+    gain.gain.value = clip.volume ?? 1;
+    source.connect(gain);
+    gain.connect(context.destination);
+    const remaining = duration - clip.start;
+    const playable = buffer.duration - trimStart - trimEnd;
+    source.start(
+      clip.start,
+      trimStart,
+      source.loop ? remaining : Math.min(remaining, playable),
+    );
+  }
+  return pcmWave(await context.startRendering());
+}
+async function seekVideoFrame(video, time) {
+  video.pause();
+  if (!video.seeking && Math.abs(video.currentTime - time) <= 0.02) return;
+  await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", onError);
+    };
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(Error("Could not decode a video frame for MP4 export."));
+    };
+    video.addEventListener("seeked", onSeeked, { once: true });
+    video.addEventListener("error", onError, { once: true });
+    video.currentTime = time;
+  });
+}
+async function seekScreenVideos(screens, videos, time) {
+  await Promise.all(
+    screens
+      .filter(
+        (screen) =>
+          screen.mediaType === "video" &&
+          time >= screen.start &&
+          time <= screen.end,
+      )
+      .map((screen) => {
+        const video = videos.get(screen.id);
+        if (!video) throw Error(`Video for screen ${screen.id} is unavailable.`);
+        const localTime = Math.max(
+          screen.trimIn || 0,
+          Math.min(
+            screen.sourceDuration - (screen.trimOut || 0),
+            (screen.trimIn || 0) + time - screen.start,
+          ),
+        );
+        return seekVideoFrame(video, Math.min(video.duration, localTime));
+      }),
+  );
 }
 export async function renderScreenMp4({
   screens,
   images,
   duration,
-  audio,
-  audioStart = 0,
-  volume = 1,
+  audioClips = [],
   reducedMotion = false,
   onProgress = () => {},
 }) {
@@ -65,7 +138,7 @@ export async function renderScreenMp4({
     onProgress("Mixing audio…");
     await ffmpeg.writeFile(
       "audio.wav",
-      await audioWave(audio,audioStart,volume,duration),
+      await audioWave(audioClips,duration),
     );
     const canvas = document.createElement("canvas");
     canvas.width = SCREEN_EXPORT.width;
@@ -74,6 +147,7 @@ export async function renderScreenMp4({
       count = Math.ceil(duration * SCREEN_EXPORT.fps);
     for (let frame = 0; frame < count; frame++) {
       const time = frame / SCREEN_EXPORT.fps;
+      await seekScreenVideos(screens, images, time);
       ctx.save();
       ctx.scale(SCREEN_EXPORT.width / 360, SCREEN_EXPORT.height / 640);
       renderReelFrame(ctx,screens,images,time,{reducedMotion});
