@@ -2727,7 +2727,7 @@ export default function ScreenStudio() {
             tabIndex={0}
             hidden={activeTab !== "Prompts"}
           >
-            <PromptLibrary />
+            <PromptLibrary onNotify={notify} />
           </section>
         </section>
         <aside className="screen-preview">
