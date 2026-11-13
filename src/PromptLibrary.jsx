@@ -13,7 +13,7 @@ const promptTabs = [
       "Campaign text: tagline, intro, targeted message, and CTA",
       "Location presets: bus, metro, park, market, campus, tea stall, and more",
       "Crowd, people, scene, and incident storytelling controls",
-      "Typography: headline scale, line breaks, centered maroon headline, yellow banner",
+      "Typography: headline scale, line breaks, campaign-specific alignment, colors and treatments",
       "Canvas sizing: Facebook Feed, Square Post, and Reel/Story output rules",
     ],
   },

@@ -663,8 +663,7 @@ export default function SmartCampaignBuilder({ calendarDay = false, workflowId, 
               placeholder={"আপনার ভিডিওতে কি\nঅন্যের গোপনীয়তা হারিয়ে যাচ্ছে?"}
             />
             <p className="smart-campaign-note">
-              The generated prompt requests bold centered Bengali text in deep maroon on a yellow
-              brush-stroke banner. Text rendering is guided, not pixel-guaranteed.
+              The generated prompt selects typography, colors and text treatments for each campaign. Text rendering is guided, not pixel-guaranteed.
             </p>
           </div>
         </details>

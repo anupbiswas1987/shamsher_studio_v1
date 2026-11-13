@@ -110,7 +110,7 @@ function formatTypography(values) {
     manualBreaks
       ? `Manual line arrangement — follow these line breaks exactly:\n${manualBreaks}\nPreserve the underlying main-question text exactly; this arrangement changes line wrapping only.`
       : "No manual line arrangement supplied; use balanced natural wrapping within the selected maximum line count.",
-    "Use bold, highly legible Bengali typography, centered on a yellow brush-stroke banner, with deep-maroon text.",
+    "Use highly legible Bengali typography. Choose type treatment, alignment, color and any container to suit this campaign’s independent art direction, with strong readable contrast.",
     "Keep comfortable internal padding and all headline text within the selected safe area. Do not stretch, compress, distort, crop, or alter Bengali glyphs.",
     "If the supplied headline is too long, reduce its relative font size as needed rather than adding a third line.",
     "The selected scale guides image-generation composition and does not guarantee exact rendered font pixels.",
@@ -139,7 +139,8 @@ function formatChecklist(values) {
     `- Exact ${canvas.width} × ${canvas.height} ${canvas.ratio} canvas, composed natively.`,
     `- Keep all primary content inside ${canvas.safeArea}; this is an editorial guideline, not a guaranteed platform crop guide.`,
     "- Reproduce every supplied Bengali and English campaign field exactly, with no rewritten, misspelled, duplicated, or invented text.",
-    "- Follow the selected headline scale, line count, alignment, colors, and any supplied manual line arrangement.",
+    "- Follow the selected headline scale, line count and any supplied manual line arrangement. Choose alignment and colors for this poster.",
+    "- Verify independent art direction: no automatic reuse of headline banners, typography treatments, information cards, CTA ribbons, palettes, backgrounds or layouts. Preserve canonical character and logo identity.",
     "- Preserve the official logo artwork and Bengali lettering; do not redraw or alter it.",
     "- Keep Shomser consistent with the supplied character reference and non-confrontational in the scene.",
     "- Make the selected location authentic, the requested crowd level appropriate, and people and perspective credible.",

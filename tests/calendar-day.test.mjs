@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { CALENDAR_DAY_INITIAL_VALUES, composeCalendarDayPrompt, composeCalendarDayScenePrompt, parseCalendarDayImport, exportCalendarDayJson } from '../src/calendar-day.js';
-import { SMART_CAMPAIGN_DEFAULTS, SCENE_FIELDS } from '../src/smart-campaign.js';
+import { SMART_CAMPAIGN_DEFAULTS, SCENE_FIELDS, composeSmartCampaignPrompt } from '../src/smart-campaign.js';
 const master = await readFile(new URL('../public/resources/Smartness_Awareness_Master_Prompt_V3.md', import.meta.url), 'utf8');
 const values = { ...CALENDAR_DAY_INITIAL_VALUES, ...Object.fromEntries(SCENE_FIELDS.map(key => [key, SMART_CAMPAIGN_DEFAULTS[key]])), date: '2026-12-16', occasion: 'Victory Day', title_tagline: 'বিজয়ের আনন্দ সবার', targetedInfo: 'সবার পাশে দাঁড়ান', finalCta: 'আজ একটি ভালো কাজ করুন' };
 test('calendar prompts include date, occasion, and renamed title without the legacy field', () => {
@@ -182,4 +182,21 @@ test('Calendar Day final poster adds 20 px clearance and protects complete logos
   assert.ok(!feed.includes('Top ~20%'));
   assert.ok(feed.includes('### PRIORITY RULE')); 
   assert.ok(feed.includes('Keep at least 140 px between the bottom of the CTA and the canvas edge')); 
+});
+
+
+test('all active final prompt workflows require adaptive art direction without fixed styling conflicts', () => {
+  const prompts = [composeCalendarDayPrompt(master, values), composeSmartCampaignPrompt(master, { ...values, taglineQuestion: values.title_tagline })];
+  for (const prompt of prompts) {
+    assert.ok(prompt.includes('ADAPTIVE VISUAL DESIGN RULE — MANDATORY'));
+    assert.ok(prompt.includes('Every poster must have an independently developed visual art direction.'));
+    assert.ok(prompt.includes('Maintain brand recognition through Shomser'));
+    for (const conflict of ['centered on a yellow brush-stroke banner', 'Bottom maroon CTA ribbon', 'Palette: cream, maroon', 'retain the cream, maroon', '**Top ~20%:**', '**Lower ~25%:**', 'compact cream highlight']) {
+      assert.ok(!prompt.includes(conflict), conflict);
+    }
+    assert.ok(prompt.includes('cream panjabi'));
+    assert.ok(prompt.includes('maroon scarf'));
+  }
+  assert.ok(prompts[0].includes('ribbon is optional'));
+  assert.ok(prompts[0].includes('Y <= 1210'));
 });

@@ -70,7 +70,7 @@ function protectCalendarDayLayout(prompt, values) {
     '- Keep all logos, text, speech bubbles, faces and important visual elements inside this safe area.',
     '- Maintain at least 20 px of additional clearance beyond the previous internal margins (80 px becomes 100 px).',
     '- Background scenery may extend to the canvas edges.',
-    '- Never crop, clip or partially hide the logo, headline, footer ribbon or CTA.',
+    '- Never crop, clip or partially hide the logo, headline, footer information group or CTA.',
     '- Compose natively for the selected aspect ratio.',
   ].join('\n');
   const protection = `## 5. Visual hierarchy and art direction
@@ -97,18 +97,19 @@ All critical branding and text must remain well inside the canvas, with addition
 - Keep the entire logo inside the protected header.
 
 ### MAIN CONTENT
-- Position the headline below the protected logo area.
+- Position the headline below the protected logo area, choosing its alignment and treatment specifically for this occasion.
 - Prioritize one occasion-specific storytelling scene.
 - Shomser and the supporting characters must remain visually connected to the occasion.
 - Keep all dialogue bubbles fully visible.
 - Reduce decorative elements rather than overcrowding the poster.
 - Preserve the user-supplied canonical logo artwork and Bengali lettering.
-- Follow the supplied character reference sheet for Shomser's proportions, features and outfit.
-- Use lighting guided by SCENE_DETAILS; retain the cream, maroon and golden-yellow palette and expressive hand-drawn Bengali cartoon aesthetic with believable Bangladesh surroundings.
+- Follow the supplied character reference sheet for Shomser's proportions, features and outfit: curly black hair, round glasses, curled moustache, cream panjabi, maroon scarf, brown shoulder bag and sandals. These character colors do not prescribe the poster palette.
+- Use SCENE_DETAILS for environmental context. Independently choose lighting, palette, typography, background and graphic treatments to fit the occasion, while preserving the canonical character and logo.
 
 ### FOOTER PROTECTION
 - Reserve the bottom ${bottomMargin} px as a protective region.
-- The complete CTA ribbon, including all shadows and decorative marks, must end at Y <= ${footerEnd}.
+- Choose a fresh CTA style and arrangement within the protected footer; a ribbon is optional.
+- The complete CTA treatment, including all shadows and decorative marks, must end at Y <= ${footerEnd}.
 - Keep at least ${bottomMargin} px between the bottom of the CTA and the canvas edge.
 - Move the entire footer information group upward when necessary.
 - Reduce the height of the illustration or spacing above the footer to create enough room.
@@ -130,8 +131,8 @@ Never solve spacing problems by cropping the logo or footer.`;
     '- No logo pixels, text, brushstrokes, shadows or CTA decorations may cross the primary safe-area boundaries.',
     `- Verify the complete logo starts at Y >= ${topMargin}, at least ${logoLeft} px from the left edge, with an approximate width of 140–160 px and its original aspect ratio.`,
     '- Verify that the complete logo is visible.',
-    `- Verify the complete footer information group, CTA ribbon, shadows and decorations end at Y <= ${footerEnd}, leaving at least ${bottomMargin} px below.`,
-    '- Verify that the complete footer CTA ribbon is visible.',
+    `- Verify the complete footer information group, CTA treatment, shadows and decorations end at Y <= ${footerEnd}, leaving at least ${bottomMargin} px below.`,
+    '- Verify that the complete footer CTA treatment is visible.',
     '- If any important element violates the safe area, automatically reposition or proportionally reduce it before finalizing.',
     '- The 20 px additional margin is mandatory for every poster.',
   ].join('\n');

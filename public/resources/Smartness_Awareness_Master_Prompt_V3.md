@@ -3,6 +3,22 @@
 
 You are the creative director, character-continuity supervisor, Bengali typography designer, and cinematic illustrator for the original **সবজান্তা শমশের** Smartness Awareness Poster Series.
 
+### ADAPTIVE VISUAL DESIGN RULE — MANDATORY
+
+Every poster must have an independently developed visual art direction. Do not reuse a fixed headline banner, typography treatment, information card, CTA ribbon, color palette, background treatment or layout.
+
+Analyze the campaign message and select a suitable visual theme, typography hierarchy, color palette, text containers and graphic treatments.
+
+Headline text may appear directly over the background, inside geometric shapes, editorial blocks, gradients, illustrated elements or other suitable treatments.
+
+CTA placement and styling must be designed specifically for each poster rather than automatically using a maroon ribbon.
+
+Maintain brand recognition through Shomser's character and official logo, not through repetitive poster templates.
+
+The final collection should look like a professionally art-directed social campaign, not a collection of duplicated templates.
+
+Preserve canonical character appearance, official logo artwork, exact supplied copy, selected canvas, safety clearances and explicit user typography settings. These are continuity and readability constraints, not a reusable visual template. Choose all remaining styling independently for this message.
+
 ## 1. Objective
 Create **one finished, production-quality Bengali social-awareness poster** about respectful public behavior in the supplied location. The artwork must tell the story visually before readers notice the explanatory copy. Educate without ridiculing or publicly shaming anyone.
 
@@ -54,13 +70,12 @@ Show clear phone-related sound marks, but do not cover faces or text.
 - Use a maximum of 2 lines, with visually balanced line lengths.
 - Keep the headline noticeably smaller than the original oversized V3 headline.
 - Use bold, highly legible Bengali typography.
-- Text color: Deep maroon.
-- Background: Yellow brush-stroke banner.
-- Keep the entire headline and its banner within the primary safe area (X = 80–1000).
-- Center-align the headline inside the yellow banner.
+- Select headline color and background treatment for the campaign message, with strong readable contrast.
+- Keep the entire headline and any chosen container within the primary safe area (X = 80–1000).
+- Choose headline alignment to suit this poster’s art direction.
 - Maintain comfortable internal padding around all text.
 - Do not stretch, compress, distort, or crop Bengali characters.
-- Adjust line wrapping and banner width to accommodate different headline lengths without automatically enlarging the font.
+- Adjust line wrapping and any container width to accommodate different headline lengths without automatically enlarging the font.
 - If a headline is unusually long, reduce the font size slightly rather than creating a third line.
 - Preserve the supplied text exactly, including Bengali spelling, punctuation and যুক্তাক্ষর.
 
@@ -83,16 +98,16 @@ Show clear phone-related sound marks, but do not cover faces or text.
 1. Main question, largest Bengali heading: **[TAGLINE_QUESTION]**
 2. English campaign line: **[FIXED_ENGLISH_TAGLINE]**
 3. Secondary Bengali introduction: **[FIXED_INTRO]**
-4. Lower informational highlight: **[TARGETED_INFO]**
-5. Bottom maroon CTA ribbon: **[FINAL_CTA]**
+4. Informational message: **[TARGETED_INFO]**
+5. Campaign-specific CTA treatment: **[FINAL_CTA]**
 
 No extra dialogue bubbles, slogans, invented labels, distorted spelling, broken conjuncts, duplicate lines, or watermarks. Carefully verify every Bengali glyph against the supplied text. If a writing model cannot reproduce exact text, prioritize clean blank typography areas for manual overlay rather than printing incorrect Bengali.
 
 ## 5. Visual hierarchy and art direction
-- **Top ~20%:** Official supplied Shomser logo in an upper corner at natural proportional scale; large two-line awareness question on a yellow painted-paper highlight; distinct maroon English tagline; concise Bengali intro below.
-- **Middle ~55%:** Storytelling image dominates. Shomser and the person demonstrating the issue centrally located, visible from waist/torso upward with meaningful hand gestures and strong expressions. Nearby reactions and recognizable location in supporting roles. Do not hide the key action behind large text cards.
-- **Lower ~25%:** Readable targeted information on a compact cream highlight, followed by complete final CTA in a maroon ribbon inside safe margins. Leave sufficient bottom space so the CTA is never clipped.
-- Warm daylight; 50% believable Bangladesh environmental realism + 50% expressive hand-drawn Bengali cartoon aesthetic. Palette: cream, maroon, golden yellow, natural transit interior colors.
+- Develop a fresh hierarchy and arrangement for the supplied message, with a readable headline, campaign lines, learning point and CTA.
+- Prioritize one clear storytelling scene with meaningful gestures, expressions and relevant supporting reactions. Keep text from hiding the key action.
+- Choose lighting, palette, background treatment, typography and containers for this campaign; use supplied SCENE_DETAILS for environmental context.
+- Select CTA placement and styling independently, keeping its complete treatment inside the safe area.
 - Character continuity: curly black hair, round spectacles, distinctive curled moustache, cream panjabi, maroon scarf, brown shoulder bag, sandals. Shomser remains warm, witty, wise and non-confrontational.
 - Preserve the **user-supplied canonical logo artwork and Bengali lettering**. Reproduce it faithfully; never hallucinate or redesign the logo.
 - The **user-supplied character reference sheet** governs Shomser's proportions, features and outfits. Do not substitute generic mascot art.
