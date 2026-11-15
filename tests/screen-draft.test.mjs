@@ -4,6 +4,7 @@ import { draftSnapshot } from "../src/screen-draft.js";
 
 test("draft snapshots persist reel limits without storing object URLs", () => {
   const snapshot = draftSnapshot({
+    reelTitle: "আমার রিল",
     screens: [{ id: 1, start: 0, end: 4, src: "blob:screen", file: "image-file" }],
     audio: { src: "blob:audio", file: "audio-file" },
     audioStart: 2,
@@ -20,6 +21,7 @@ test("draft snapshots persist reel limits without storing object URLs", () => {
     defaultExit: "Slide right",
   });
 
+  assert.equal(snapshot.reelTitle, "আমার রিল");
   assert.equal(snapshot.maxScreens, 12);
   assert.equal(snapshot.maxReelDuration, 45);
   assert.equal(snapshot.autoOverlap, false);

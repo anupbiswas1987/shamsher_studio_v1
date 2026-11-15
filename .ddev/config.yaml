@@ -6,7 +6,14 @@ webserver_type: nginx-fpm
 omit_containers:
   - db
 nodejs_version: "22"
+# Install native encoding tools automatically on every DDEV setup.
+webimage_extra_packages:
+  - ffmpeg
+  - chromium
 web_extra_daemons:
   - name: vite
     command: npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
+    directory: /var/www/html
+  - name: render-worker
+    command: exec node server/render-server.mjs
     directory: /var/www/html

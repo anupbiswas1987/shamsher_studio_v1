@@ -2,13 +2,14 @@
   position: fixed;
   z-index: 1000;
   left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom));
+  top: max(16px, env(safe-area-inset-top));
+  bottom: auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  width: min(560px, calc(100vw - 32px));
-  padding: 12px 14px;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 8px 10px;
   transform: translateX(-50%);
   color: #f5f2fa;
   background: #27213a;
@@ -17,6 +18,8 @@
   border-radius: 8px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
   line-height: 1.5;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
 }
 
 .screen-notice > strong {
@@ -29,8 +32,8 @@
 }
 
 .screen-studio .screen-notice > button {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 4px 10px;
   font-size: 20px;
   line-height: 1;

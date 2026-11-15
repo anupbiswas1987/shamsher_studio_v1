@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { CALENDAR_DAY_INITIAL_VALUES, composeCalendarDayPrompt, composeCalendarDayScenePrompt, parseCalendarDayImport, exportCalendarDayJson } from '../src/calendar-day.js';
-import { SMART_CAMPAIGN_DEFAULTS, SCENE_FIELDS, composeSmartCampaignPrompt } from '../src/smart-campaign.js';
+import { SMART_CAMPAIGN_DEFAULTS, SCENE_FIELDS, composeSmartCampaignPrompt, parseCampaignImport } from '../src/smart-campaign.js';
 const master = await readFile(new URL('../public/resources/Smartness_Awareness_Master_Prompt_V3.md', import.meta.url), 'utf8');
 const values = { ...CALENDAR_DAY_INITIAL_VALUES, ...Object.fromEntries(SCENE_FIELDS.map(key => [key, SMART_CAMPAIGN_DEFAULTS[key]])), date: '2026-12-16', occasion: 'Victory Day', title_tagline: 'বিজয়ের আনন্দ সবার', targetedInfo: 'সবার পাশে দাঁড়ান', finalCta: 'আজ একটি ভালো কাজ করুন' };
 test('calendar prompts include date, occasion, and renamed title without the legacy field', () => {
@@ -199,4 +199,45 @@ test('all active final prompt workflows require adaptive art direction without f
   }
   assert.ok(prompts[0].includes('ribbon is optional'));
   assert.ok(prompts[0].includes('Y <= 1210'));
+});
+
+
+test('campaign imports reject explicit types and tabs that do not match the active workflow', () => {
+  for (const sceneOnly of [false, true]) {
+    for (const key of ['type', 'tab']) {
+      assert.throws(() => parseCalendarDayImport(JSON.stringify({ [key]: 'smart-campaign', values }), sceneOnly), /Campaign tab mismatch/);
+      assert.throws(() => parseCampaignImport(JSON.stringify({ [key]: 'calendar-day', values }), sceneOnly), /Campaign tab mismatch/);
+      assert.throws(() => parseCalendarDayImport(JSON.stringify({ [key]: 'unknown', values }), sceneOnly), /No fields were imported/);
+    }
+  }
+  assert.equal(parseCalendarDayImport(JSON.stringify({ type: 'calendar-day', version: 1, values })).occasion, values.occasion);
+  assert.equal(parseCampaignImport(JSON.stringify({ type: 'smart-campaign', version: 1, values: { location: 'Park' } })).location, 'Park');
+  assert.equal(parseCalendarDayImport('{"location":"Park"}').location, 'Park');
+});
+
+
+test('Smart Campaign import accepts matching tab labels and optional version metadata', () => {
+  for (const type of ['smart-campaign', 'Smart Campaign', 'Smart Campaing', 'SMART_CAMPAIGN']) {
+    assert.equal(parseCampaignImport(JSON.stringify({ type, values: { location: 'Park' } })).location, 'Park');
+    assert.throws(() => parseCampaignImport(JSON.stringify({ type, version: 2, values: { location: 'Park' } })), /version/);
+    assert.throws(() => parseCalendarDayImport(JSON.stringify({ type, values: { location: 'Park' } })), /tab mismatch/);
+  }
+  assert.equal(parseCalendarDayImport('{"type":"Calendar Day","location":"Park"}').location, 'Park');
+  assert.throws(() => parseCampaignImport('{"tab":"Calendar Day","location":"Park"}'), /tab mismatch/);
+});
+
+
+test('Smart Campaign rejects Calendar Day JSON with missing or misleading type metadata', () => {
+  const scene = Object.fromEntries(SCENE_FIELDS.map(key => [key, values[key]]));
+  for (const calendarFields of [{ date: '2026-11-14' }, { occasion: 'World Kindness Day' }, { shomserDialogue: 'একটি ভালো কাজ করুন' }]) {
+    const data = { ...scene, ...calendarFields };
+    for (const payload of [data, { values: data }, { suggestions: data }, { type: 'smart-campaign', version: 1, values: data }, { ...calendarFields, values: scene }]) {
+      for (const sceneOnly of [false, true]) {
+        assert.throws(() => parseCampaignImport(JSON.stringify(payload), sceneOnly), /Calendar Day.*No fields were imported/);
+      }
+    }
+    assert.ok(parseCalendarDayImport(JSON.stringify(data), true));
+  }
+  assert.throws(() => parseCampaignImport(JSON.stringify({ values: { type: 'calendar-day', ...scene } })), /tab mismatch/);
+  assert.throws(() => parseCalendarDayImport(JSON.stringify({ values: { type: 'smart-campaign', ...scene } })), /tab mismatch/);
 });

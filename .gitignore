@@ -51,3 +51,6 @@ Desktop.ini
 *~
 /tmp/
 /temp/
+
+# Temporary server render uploads and exports
+/.render-jobs/

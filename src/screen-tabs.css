@@ -1192,7 +1192,7 @@
   font-size: 11px;
 }
 
-.screen-studio .screen-video-trim input[type="number"] {
+.screen-studio .screen-video-trim input[inputmode="decimal"] {
   width: 100%;
   min-height: 38px;
   padding: 7px;
@@ -1712,7 +1712,7 @@
   min-width: 112px;
 }
 
-.screen-audio-clip-controls input[type="number"] {
+.screen-audio-clip-controls input[inputmode="decimal"] {
   width: 100%;
   min-height: 40px;
 }
@@ -1821,7 +1821,8 @@
   }
 
   .screen-studio .screen-notice {
-    bottom: max(16px, env(safe-area-inset-bottom));
+    top: max(16px, env(safe-area-inset-top));
+    bottom: auto;
   }
 }
 
@@ -2018,3 +2019,5 @@
 .screen-studio .calendar-date-grid button[aria-pressed="true"] { color: #fff; background: #674486; border-color: #d7baf4; }
 .screen-studio .calendar-date-grid button[aria-current="date"] { text-decoration: underline; text-underline-offset: 4px; }
 .calendar-date-popup button:focus-visible { outline: 2px solid #d7baf4; outline-offset: 1px; }
+
+.screen-aspect-field { display: grid; gap: 6px; margin-bottom: 16px; color: #bbb2ca; font-size: 12px; }

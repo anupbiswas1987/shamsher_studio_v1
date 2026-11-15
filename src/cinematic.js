@@ -25,6 +25,12 @@ export const PRESETS = [
   ["focal", "Zoom toward focal point"],
   ["diagonal", "Diagonal cinematic drift"],
   ["handheld", "Gentle handheld camera"],
+  ["fade-in", "Opacity increase"],
+  ["fade-out", "Opacity decrease"],
+  ["diagonal-reverse", "Reverse diagonal drift"],
+  ["rotate-left", "Rotate left"],
+  ["rotate-right", "Rotate right"],
+  ["pulse", "Gentle zoom pulse"],
   ["custom", "Custom keyframes"],
 ];
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -57,9 +63,18 @@ export function createAnimation(preset = "zoom-in") {
     end = { ...end, x: 1.5, y: -1.5, scale: 0.98 };
   }
   if (preset === "handheld") start.scale = end.scale = 0.97;
+  if (preset === "fade-in") start.opacity = 0;
+  if (preset === "fade-out") end.opacity = 0;
+  if (preset === "diagonal-reverse") {
+    start = { ...start, x: 1.5, y: -1.5, scale: 0.94 };
+    end = { ...end, x: -1.5, y: 1.5, scale: 0.98 };
+  }
+  if (preset === "rotate-left") end.rotation = -8;
+  if (preset === "rotate-right") end.rotation = 8;
   return {
     preset,
     duration: null,
+    repeat: "none",
     intensity: 1,
     easing: "ease-in-out",
     start,
@@ -121,15 +136,23 @@ export function evaluateAnimation(
   { reducedMotion = false } = {},
 ) {
   const a = normalizeAnimation(clip.animation),
-    length = sourceDuration(clip),
-    t = sourceTime(clip, timelineTime),
-    duration = a.duration == null ? length : Math.max(0.01, a.duration),
-    progress = clamp(t / duration, 0, 1),
+    length = a.timeline === "screen" ? Math.max(0.1, clip.end - clip.start) : sourceDuration(clip),
+    t = a.timeline === "screen" ? clamp(timelineTime - clip.start, 0, length) : sourceTime(clip, timelineTime),
+    duration = a.duration == null ? length : Math.max(0.1, finite(a.duration, length)),
+    repeating = a.duration != null && ["loop", "alternate"].includes(a.repeat),
+    // Use clip-relative time so seeking and exports produce identical cycles.
+    cycle = Math.floor(t / duration),
+    remainder = t - cycle * duration,
+    atFinalBoundary = t > 0 && t >= length && remainder < 1e-9,
+    cycleTime = !repeating ? t : a.repeat === "alternate"
+      ? (cycle % 2 ? duration - remainder : remainder)
+      : atFinalBoundary ? duration : remainder,
+    progress = clamp(cycleTime / duration, 0, 1),
     ease = (EASINGS[a.easing] || EASINGS.linear)(progress);
   let state = identity();
   if (a.preset === "custom") {
     for (const key of PROPERTIES)
-      state[key] = evaluateTrack(a.keyframes[key], t, a.start[key], a.easing);
+      state[key] = evaluateTrack(a.keyframes[key], cycleTime, a.start[key], a.easing);
   } else if (a.preset !== "static") {
     for (const key of PROPERTIES)
       state[key] = a.start[key] + (a.end[key] - a.start[key]) * ease;
@@ -137,10 +160,11 @@ export function evaluateAnimation(
       // Analytic bounded movement: no random numbers or frame-history dependence.
       const envelope = Math.sin(Math.PI * progress);
       state.x +=
-        envelope * (0.3 * Math.sin(t * 2.1) + 0.12 * Math.sin(t * 4.7));
-      state.y += envelope * 0.25 * Math.sin(t * 1.7);
-      state.rotation += envelope * 0.18 * Math.sin(t * 2.3);
+        envelope * (0.3 * Math.sin(cycleTime * 2.1) + 0.12 * Math.sin(cycleTime * 4.7));
+      state.y += envelope * 0.25 * Math.sin(cycleTime * 1.7);
+      state.rotation += envelope * 0.18 * Math.sin(cycleTime * 2.3);
     }
+    if (a.preset === "pulse") state.scale += 0.06 * Math.sin(Math.PI * progress) ** 2;
   }
   const intensity = clamp(finite(a.intensity, 1), 0, 2);
   for (const key of ["x", "y", "rotation"]) state[key] *= intensity;
@@ -382,15 +406,15 @@ export function imageGeometry(
     corners,
   };
 }
-export function transitionState(clip,time,{reducedMotion=false}={}){
+export function transitionState(clip,time,{reducedMotion=false,width=360,height=640}={}){
  const local=time-clip.start,d=Math.min(clip.transition||0,(clip.end-clip.start)/2);let style='None',p=1,exit=false;
  if(d>0&&local<d){style=clip.entry;p=local/d}else if(d>0&&time>clip.end-d){style=clip.exit;p=(clip.end-time)/d;exit=true}
  const q=1-clamp(p,0,1),direction=exit?-1:1;if(reducedMotion)return {x:0,y:0,scale:1,opacity:1};
- return {x:style==='Slide left'?q*360*direction:style==='Slide right'?-q*360*direction:0,y:style==='Slide up'?q*640*direction:style==='Slide down'?-q*640*direction:0,scale:style==='Zoom'?1+q*.3:1,opacity:!style||style==='None'?1:1-q};
+ return {x:style==='Slide left'?q*width*direction:style==='Slide right'?-q*width*direction:0,y:style==='Slide up'?q*height*direction:style==='Slide down'?-q*height*direction:0,scale:style==='Zoom'?1+q*.3:1,opacity:!style||style==='None'?1:1-q};
 }
 export function evaluateClip(clip, image, time, options = {}) {
   const motion = evaluateAnimation(clip, time, options),
-    geometry = imageGeometry(clip, image, motion, 360, 640, options),
+    geometry = imageGeometry(clip, image, motion, options.width || 360, options.height || 640, options),
     transition = transitionState(clip, time, options);
   return {
     ...geometry,
@@ -401,6 +425,7 @@ export function evaluateClip(clip, image, time, options = {}) {
   };
 }
 export function renderClip(ctx, clip, image, time, options = {}) {
+  const stageWidth = options.width || 360, stageHeight = options.height || 640;
   if (image.videoWidth && image.readyState < 2) return null;
   const g = evaluateClip(clip, image, time, options);
   ctx.save();
@@ -409,18 +434,18 @@ export function renderClip(ctx, clip, image, time, options = {}) {
     const background = clip.fitBackground || {};
     if (background.mode === "color") {
       ctx.fillStyle = background.color || "#292630";
-      ctx.fillRect(0, 0, 360, 640);
+      ctx.fillRect(0, 0, options.width || 360, options.height || 640);
     } else {
       const blur = clamp(finite(background.blur, 18), 0, 32);
-      const scale = Math.max(360 / image.width, 640 / image.height);
+      const scale = Math.max(stageWidth / image.width, stageHeight / image.height);
       const width = image.width * scale;
       const height = image.height * scale;
       ctx.save();
       ctx.filter = `blur(${blur}px)`;
       ctx.drawImage(
         image,
-        (360 - width) / 2,
-        (640 - height) / 2,
+        (stageWidth - width) / 2,
+        (stageHeight - height) / 2,
         width,
         height,
       );
@@ -460,7 +485,7 @@ export function renderClip(ctx, clip, image, time, options = {}) {
 }
 export function renderReelFrame(ctx, clips, images, time, options = {}) {
   ctx.fillStyle = "#101115";
-  ctx.fillRect(0, 0, 360, 640);
+  ctx.fillRect(0, 0, options.width || 360, options.height || 640);
   const lastEnd = Math.max(
     0,
     ...clips
@@ -470,7 +495,8 @@ export function renderReelFrame(ctx, clips, images, time, options = {}) {
       })
       .map((c) => c.end),
   );
-  for (const clip of clips) {
+  // Later timeline screens enter above earlier screens during an overlap.
+  for (const clip of [...clips].sort((a, b) => a.start - b.start)) {
     const image = images.get(clip.id);
     if (
       clip.src &&

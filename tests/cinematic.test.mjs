@@ -43,8 +43,8 @@ test("subtle zoom progresses smoothly and arbitrary seeks are deterministic", ()
   }
   assert.deepEqual(evaluateAnimation(c, 1.4), evaluateAnimation(c, 1.4));
 });
-test("all eleven presets have deterministic, finite states", () => {
-  assert.equal(PRESETS.length, 11);
+test("all fifteen motion styles plus static and custom have deterministic, finite states", () => {
+  assert.equal(PRESETS.length, 17);
   for (const [name] of PRESETS) {
     const c = clip(name);
     for (const t of [0, 0.3, 1.5, 2.9, 3])
@@ -405,4 +405,95 @@ test("framing analysis reports future overscan before the risky frame is reached
   const report = analyzeFraming(c, { width: 360, height: 640 });
   assert.equal(report.needsOverscan, true);
   assert.ok(report.maxRequiredScale >= 1.3);
+});
+
+test("continuous screen motion spans the visible duration even for trimmed video", () => {
+  const c = { ...clip('pan-right'), start: 4, end: 8, sourceDuration: 60, trimIn: 12, trimOut: 44 };
+  c.animation = { ...c.animation, timeline: 'screen', easing: 'linear' };
+  near(evaluateAnimation(c, 4).x, -2);
+  near(evaluateAnimation(c, 6).x, 0);
+  near(evaluateAnimation(c, 8).x, 2);
+  assert.deepEqual(evaluateAnimation(c, 6), evaluateAnimation(JSON.parse(JSON.stringify(c)), 6));
+});
+
+test("continuous endpoint movement interpolates opacity, position, scale and rotation", () => {
+  const c = clip('endpoints');
+  c.animation = { ...c.animation, timeline: 'screen', easing: 'linear',
+    start: { x: -10, y: 20, opacity: 0.2, scale: 0.8, rotation: -10 },
+    end: { x: 30, y: -20, opacity: 0.8, scale: 1.2, rotation: 10 } };
+  const state = evaluateAnimation(c, 1.5);
+  near(state.x, 10); near(state.y, 0); near(state.opacity, 0.5);
+  near(state.scale, 1); near(state.rotation, 0);
+  const g = evaluateClip({ ...c, fit: 'custom' }, { width: 360, height: 640 }, 1.5);
+  near(g.x, 216); near(g.y, 320); near(g.opacity, 0.5);
+});
+
+test("opacity styles and zoom pulse animate deterministically with reduced motion support", () => {
+  near(evaluateAnimation(clip('fade-in'), 0).opacity, 0);
+  near(evaluateAnimation(clip('fade-in'), 3).opacity, 1);
+  near(evaluateAnimation(clip('fade-out'), 3).opacity, 0);
+  near(evaluateAnimation(clip('pulse'), 0).scale, 1);
+  near(evaluateAnimation(clip('pulse'), 1.5).scale, 1.06);
+  near(evaluateAnimation(clip('pulse'), 3).scale, 1);
+  near(evaluateAnimation(clip('pulse'), 1.5, { reducedMotion: true }).scale, 1);
+});
+
+test("continuous repeat cycles restart and hold the final frame at screen end", () => {
+  const c = { ...clip('fade-in'), start: 5, end: 9 };
+  c.animation = { ...c.animation, timeline: 'screen', duration: 1, repeat: 'loop', easing: 'linear' };
+  near(evaluateAnimation(c, 5).opacity, 0);
+  near(evaluateAnimation(c, 5.5).opacity, 0.5);
+  near(evaluateAnimation(c, 6).opacity, 0);
+  near(evaluateAnimation(c, 7.5).opacity, 0.5);
+  near(evaluateAnimation(c, 9).opacity, 1);
+  assert.deepEqual(evaluateAnimation(c, 7.5), evaluateAnimation(JSON.parse(JSON.stringify(c)), 7.5));
+  c.end = 8.5;
+  near(evaluateAnimation(c, 8.5).opacity, 0.5);
+});
+
+test("alternate repeats reverse smoothly and once mode holds end values", () => {
+  const c = { ...clip('pan-right'), end: 4 };
+  c.animation = { ...c.animation, timeline: 'screen', duration: 1, repeat: 'alternate', easing: 'linear' };
+  near(evaluateAnimation(c, 0).x, -2);
+  near(evaluateAnimation(c, 1).x, 2);
+  near(evaluateAnimation(c, 1.5).x, 0);
+  near(evaluateAnimation(c, 2).x, -2);
+  near(evaluateAnimation(c, 4).x, -2);
+  c.animation.repeat = 'none';
+  near(evaluateAnimation(c, 0.5).x, 0);
+  near(evaluateAnimation(c, 3).x, 2);
+  c.animation.duration = null;
+  c.animation.repeat = 'loop';
+  near(evaluateAnimation(c, 2).x, 0);
+  near(evaluateAnimation(c, 4).x, 2);
+});
+
+test("repeat timing stays relative to a trimmed video's screen", () => {
+  const c = { ...clip('fade-out'), start: 10, end: 14, sourceDuration: 60, trimIn: 12 };
+  c.animation = { ...c.animation, timeline: 'screen', duration: 0.5, repeat: 'loop', easing: 'linear' };
+  near(evaluateAnimation(c, 10.25).opacity, 0.5);
+  near(evaluateAnimation(c, 12.25).opacity, 0.5);
+  near(evaluateAnimation(c, 12.25, { reducedMotion: true }).opacity, 0.5);
+  c.animation.duration = NaN;
+  for (const value of Object.values(evaluateAnimation(c, 12))) assert.ok(Number.isFinite(value));
+});
+
+
+test("overlapping screens stack by timeline start without mutating list order", () => {
+  const earlier = { ...clip("static"), id: 1, start: 0, end: 3 };
+  const later = { ...clip("static"), id: 2, start: 2, end: 5 };
+  const list = [later, earlier];
+  const first = { width: 360, height: 640 };
+  const second = { width: 360, height: 640 };
+  const drawn = [];
+  const ctx = new Proxy({}, {
+    set: () => true,
+    get: (_, name) => (...args) => { if (name === "drawImage") drawn.push(args[0]); },
+  });
+  renderReelFrame(ctx, list, new Map([[1, first], [2, second]]), 2.5);
+  assert.equal(drawn.at(-1), second);
+  assert.deepEqual(list, [later, earlier]);
+  drawn.length = 0;
+  renderReelFrame(ctx, list, new Map([[1, first], [2, second]]), 3);
+  assert.ok(drawn.every(image => image === second));
 });

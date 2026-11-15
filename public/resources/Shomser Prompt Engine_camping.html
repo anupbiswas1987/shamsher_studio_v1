@@ -1,0 +1,1446 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shomser Prompt Engine</title>
+<style>
+:root{--bg:#eef1f5;--card:#fff;--tx:#1c2433;--mu:#66707f;--ac:#176b66;--ac2:#e0a100;--bd:#d6dce5;--in:#f8fafc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171f;--card:#1a212c;--tx:#e8edf4;--mu:#9aa5b5;--ac:#4cc3bb;--ac2:#f0b92e;--bd:#2c3644;--in:#141a23;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12171f;--card:#1a212c;--tx:#e8edf4;--mu:#9aa5b5;--ac:#4cc3bb;--ac2:#f0b92e;--bd:#2c3644;--in:#141a23;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 "Hind Siliguri","Segoe UI",system-ui,sans-serif}
+header{padding:18px 20px 6px}h1{margin:0;font:700 22px/1.2 Georgia,"Noto Serif Bengali",serif}header p{margin:4px 0 0;color:var(--mu)}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;padding:14px 20px 40px;max-width:1280px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:15px;font-weight:700}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 3px}
+input,select,textarea{width:100%;background:var(--in);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:7px 9px;font:inherit}
+textarea{resize:vertical;min-height:54px}input:focus,select:focus,textarea:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:start;border:1px solid var(--bd);border-radius:8px;padding:8px;margin-top:8px;background:var(--in)}
+.row.over{border-color:var(--ac2);box-shadow:0 0 0 2px var(--ac2)}
+.h{cursor:grab;color:var(--ac2);font-size:18px;user-select:none;text-align:center;padding-top:4px}
+.f{display:grid;gap:6px}.f.two{grid-template-columns:1fr 1fr}
+.b{display:flex;gap:4px}button{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}button:hover{border-color:var(--ac)}
+.dz{border:2px dashed var(--bd);border-radius:8px;padding:16px;text-align:center;color:var(--mu)}.dz.over{border-color:var(--ac);color:var(--ac)}
+.th{width:44px;height:44px;border-radius:6px;object-fit:cover;border:1px solid var(--bd)}
+.rf{grid-template-columns:22px 44px 1fr auto}
+.out{position:sticky;top:8px;align-self:start}.out textarea{min-height:420px;font:12.5px/1.5 ui-monospace,Consolas,monospace}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.mu{color:var(--mu);font-size:13px;font-weight:400}
+.g3{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+details{border:1px solid var(--bd);border-radius:8px;margin-top:8px;padding:0 12px 10px;background:var(--in)}
+summary{cursor:pointer;font-weight:600;padding:9px 0;display:flex;justify-content:space-between;gap:8px}
+fieldset{border:1px solid var(--bd);border-radius:8px;margin:4px 0;padding:2px 8px 6px;min-width:0}legend{font-size:12px;color:var(--mu);padding:0 4px}
+.chip{display:inline-flex;gap:6px;align-items:center;margin:3px 5px 3px 0;padding:3px 10px;border:1px solid var(--bd);border-radius:14px;font-size:13px;color:var(--tx);cursor:pointer;background:var(--card)}
+.chip input{width:auto;margin:0}.chip:has(input:checked){border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.warn{background:color-mix(in srgb,var(--ac2) 18%,transparent);border:1px solid var(--ac2);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:13px}
+.solo .h,.solo .b{display:none}.solo .row{grid-template-columns:1fr;border:0;padding:0;margin-top:0}.solo .row:not(:first-child){display:none}
+ol{margin:4px 0 6px;padding-left:20px}
+@media(max-width:600px){main{padding:10px}.f.two{grid-template-columns:1fr}.row{grid-template-columns:18px 1fr}.row .b{grid-column:1/-1}}
+.att{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px dashed var(--bd);border-radius:8px;padding:6px 8px;margin:4px 0}.att.over{border-color:var(--ac);background:var(--card)}
+.lock{border-color:var(--ac);background:var(--in);border-radius:8px;border:1px solid var(--ac);padding:10px}.lock p{margin:4px 0 6px;font-size:13px}
+</style></head><body>
+<header><h1>Shomser Prompt Engine</h1><p>Tick attributes in the bible, set who is in the scene, and the prompt writes itself. Everything saves in this browser.</p></header>
+<main>
+<div>
+<section><h2>Output</h2><div id="fOut"></div>
+<label>অনুপাত (রেশিও)</label><select id="ratio" aria-label="অনুপাত"><option value="9:16">9:16 — রিল / স্টোরি</option><option value="4:5">4:5 — ফিড পোর্ট্রেট</option><option value="1:1">1:1 — স্কয়ার</option><option value="16:9">16:9 — ল্যান্ডস্কেপ</option><option value="3:4">3:4 — পোর্ট্রেট</option><option value="custom">কাস্টম (মুক্ত)</option></select><div class="mu" id="ratioHint" style="margin-bottom:6px"></div>
+<div class="g3"><div><label>Width</label><input data-p="opt.w" type="number"></div><div><label>Height</label><input data-p="opt.h" type="number"></div><label style="margin:0 0 6px"><input data-p="opt.safe" type="checkbox" style="width:auto"> 4:5 safe zone</label></div></section>
+<section><h2>প্রজেক্ট লাইব্রেরি</h2><select id="lib" aria-label="সংরক্ষিত প্রজেক্ট"></select><input id="libName" placeholder="নাম (যেমন: Episode 01 — Screen 02)" style="margin-top:6px"><div class="bar" style="margin-top:8px"><button id="libSave">সংরক্ষণ</button><button id="libLoad">খুলুন</button><button id="libDel">মুছুন</button></div><div class="mu">এই ব্রাউজারে সংরক্ষিত হয়; ছবি সংরক্ষিত হয় না।</div></section>
+<section><h2>Scene</h2><div id="fScene"></div><button id="clr" style="margin-top:10px">Clear scene, keep bible</button> <button id="smp" style="margin-top:10px">Load reel cover sample</button></section>
+<section><h2>Cast in this scene</h2>
+<div class="lock"><b>Shomser — locked identity</b><label class="mu" style="display:block"><input type="checkbox" data-p="shom.on" style="width:auto"> এই ছবিতে শমশের থাকবে</label><p id="shomTxt"></p><div id="shomAt"></div><label>Extra note for this scene</label><textarea data-p="shom.d"></textarea></div>
+<div id="lChars"></div><button data-add="chars" style="margin-top:8px">+ Character</button></section>
+<section id="sDlg"><h2>Dialogue (drag to reorder)</h2><label class="mu" style="display:block"><input type="checkbox" data-p="opt.bubble" style="width:auto"> স্পিচ বাবল চালু (বন্ধ থাকলে সংলাপ প্রম্পটে যাবে না)</label><div id="lDlg"></div><button data-add="dlg" style="margin-top:8px">+ Line</button></section>
+<section><h2>Reference images (drop files here)</h2>
+<div class="dz" id="dz">Drop character sheets, previous screen, logo — or a .md/.txt prompt to append as extra notes<br><button id="pick" style="margin-top:8px">Browse files</button><input id="file" type="file" multiple hidden></div>
+<div id="lRefs"></div><div class="mu" id="ord" style="margin-top:8px"></div></section>
+<section><h2>Series bible <span class="mu">(ঐচ্ছিক সেটিংস)</span></h2><div class="mu">Open a group, tick what applies. Each group has a custom box for anything not listed.</div><div id="acc"></div></section>
+</div>
+<div class="out"><section><h2>Generated prompt</h2>
+<div class="bar"><button class="p" id="copy" aria-live="polite">Copy prompt</button><button id="dl">Download .md</button><button id="rst">Reset all</button><button id="exp">Export project (.json)</button><button id="imp">Import project</button><input id="impf" type="file" accept=".json,application/json" hidden><span class="mu" id="cnt"></span></div>
+<div class="warn" id="manual" role="status" hidden>✎ প্রম্পট হাতে বদলানো হয়েছে — ফর্মের পরিবর্তন আর এখানে আসবে না। <button id="regen">আবার তৈরি করুন</button></div><div id="warn" role="status" aria-live="polite"></div><div class="mu" id="tip" style="margin-bottom:8px"></div>
+<textarea id="out" spellcheck="false"></textarea></section></div>
+</main>
+<footer style="max-width:1280px;margin:auto;padding:0 20px 28px"><button id="stbtn">স্ব-পরীক্ষা চালান</button><div id="st" class="mu" role="status"></div></footer>
+<script>
+/* ===== 1. FIXED CONSTANTS =====
+   Shomser identity text and attribute lists. These values go into the prompt (English). */
+const SHOM = "Main host and series hero. Face, hairstyle, costume, proportions and colors exactly as in the supplied Shomser reference sheet and logo; never redesigned or replaced. Knowledgeable, confident, warm, slightly theatrical.";
+
+/* ===== 2. BENGALI UI LABELS =====
+   Key = English label/value; the Bengali text is shown only in the interface. */
+const BN = {
+    "Shomser Prompt Engine": "শমশের প্রম্পট ইঞ্জিন",
+    "Tick attributes in the bible, set who is in the scene, and the prompt writes itself. Everything saves in this browser.": "বাইবেলে বৈশিষ্ট্য টিক দিন, দৃশ্যে কারা আছে ঠিক করুন — প্রম্পট নিজেই তৈরি হবে। সবকিছু এই ব্রাউজারে সংরক্ষিত থাকে।",
+    "Output": "আউটপুট",
+    "Width": "প্রস্থ",
+    "Height": "উচ্চতা",
+    "4:5 safe zone": "৪:৫ সেফ জোন",
+    "Scene": "দৃশ্য",
+    "Clear scene, keep bible": "দৃশ্য মুছুন, বাইবেল রাখুন",
+    "Cast in this scene": "এই দৃশ্যের চরিত্র",
+    "Shomser — locked identity": "শমশের — লক করা পরিচয়",
+    "Extra note for this scene": "এই দৃশ্যের জন্য অতিরিক্ত নোট",
+    "+ Character": "+ চরিত্র",
+    "+ Line": "+ সংলাপ",
+    "Dialogue (drag to reorder)": "সংলাপ (টেনে ক্রম বদলান)",
+    "Reference images (drop files here)": "রেফারেন্স ছবি (ফাইল এখানে ফেলুন)",
+    "Drop character sheets, previous screen, logo — or a .md/.txt prompt to append as extra notes": "ক্যারেক্টার শিট, আগের স্ক্রিন, লোগো — অথবা অতিরিক্ত নোট হিসেবে .md/.txt প্রম্পট ফেলুন",
+    "Browse files": "ফাইল বাছুন",
+    "Series bible": "সিরিজ বাইবেল",
+    "Open a group, tick what applies. Each group has a custom box for anything not listed.": "গ্রুপ খুলে যা প্রযোজ্য টিক দিন। তালিকায় নেই এমন কিছুর জন্য প্রতিটি গ্রুপে নিজের লেখার ঘর আছে।",
+    "Generated prompt": "তৈরি প্রম্পট",
+    "Copy prompt": "প্রম্পট কপি করুন",
+    "Download .md": ".md ডাউনলোড",
+    "Reset all": "সব রিসেট",
+    "Target AI tool": "টার্গেট AI টুল",
+    "Image type": "ছবির ধরন",
+    "Story screen": "গল্পের স্ক্রিন",
+    "Episode poster": "এপিসোড পোস্টার",
+    "Custom image": "কাস্টম ছবি",
+    "Episode / screen label": "এপিসোড / স্ক্রিন লেবেল",
+    "Title": "শিরোনাম",
+    "Scene description and action": "দৃশ্যের বর্ণনা ও অ্যাকশন",
+    "Composition and blocking": "কম্পোজিশন ও চরিত্রের অবস্থান",
+    "Poster main message (posters)": "পোস্টারের মূল বার্তা (পোস্টারে)",
+    "Poster footer (posters)": "পোস্টারের ফুটার (পোস্টারে)",
+    "Extra notes": "অতিরিক্ত নোট",
+    "Character sheet": "ক্যারেক্টার শিট",
+    "Previous screen": "আগের স্ক্রিন",
+    "Environment": "পরিবেশ",
+    "Logo": "লোগো",
+    "Style": "স্টাইল",
+    "Other": "অন্যান্য",
+    "Father / Shomser's brother": "বাবা / শমশেরের ভাই",
+    "Mother": "মা",
+    "Student (girl)": "ছাত্রী",
+    "Student (boy)": "ছাত্র",
+    "Teacher": "শিক্ষক",
+    "Shopkeeper": "দোকানদার",
+    "Friend": "বন্ধু",
+    "Neighbour": "প্রতিবেশী",
+    "Grandparent": "দাদা-দাদি / নানা-নানি",
+    "Online troll / scammer": "অনলাইন ট্রল / প্রতারক",
+    "Child": "শিশু",
+    "Teen": "কিশোর-কিশোরী",
+    "Young adult": "তরুণ",
+    "Adult": "প্রাপ্তবয়স্ক",
+    "Middle-aged": "মধ্যবয়সী",
+    "Elderly": "বয়স্ক",
+    "Follow reference sheet": "রেফারেন্স শিট অনুযায়ী",
+    "Purple floral salwar kameez + light pink dupatta": "বেগুনি ফুলেল সালোয়ার কামিজ + হালকা গোলাপি ওড়না",
+    "Cream saree with red border": "লাল পাড়ের ক্রিম শাড়ি",
+    "School uniform": "স্কুল ইউনিফর্ম",
+    "Panjabi": "পাঞ্জাবি",
+    "Shirt and trousers": "শার্ট-প্যান্ট",
+    "Lungi and shirt": "লুঙ্গি ও শার্ট",
+    "Shopkeeper apron": "দোকানির অ্যাপ্রন",
+    "Custom (describe in notes)": "কাস্টম (নোটে লিখুন)",
+    "attentive": "মনোযোগী",
+    "curious": "কৌতূহলী",
+    "mildly surprised": "সামান্য অবাক",
+    "concerned": "চিন্তিত",
+    "worried": "উদ্বিগ্ন",
+    "shy": "লাজুক",
+    "embarrassed": "বিব্রত",
+    "confident": "আত্মবিশ্বাসী",
+    "cheerful": "প্রফুল্ল",
+    "theatrical": "নাটুকে",
+    "amused": "কৌতুকমগ্ন",
+    "proud": "গর্বিত",
+    "thoughtful": "ভাবনামগ্ন",
+    "skeptical": "সন্দিহান",
+    "supportive": "সহায়ক",
+    "hopeful": "আশাবাদী",
+    "excited": "উত্তেজিত",
+    "standing": "দাঁড়িয়ে",
+    "seated at desk": "ডেস্কে বসে",
+    "one hand raised": "এক হাত উঁচু",
+    "pointing": "আঙুল দিয়ে দেখাচ্ছে",
+    "hands behind back": "পেছনে হাত",
+    "leaning forward": "সামনে ঝুঁকে",
+    "arms folded": "হাত গুটানো",
+    "holding smartphone": "স্মার্টফোন হাতে",
+    "writing": "লিখছে",
+    "pen paused": "কলম থেমে আছে",
+    "looking down": "নিচে তাকিয়ে",
+    "explaining with gesture": "ইশারায় বোঝাচ্ছে",
+    "hand on shoulder": "কাঁধে হাত",
+    "hands empty": "খালি হাত",
+    "holding textbook": "পাঠ্যবই হাতে",
+    "looking at speaker": "বক্তার দিকে তাকিয়ে",
+    "laughing softly": "মৃদু হাসছে",
+};
+Object.assign(BN, {
+});
+Object.assign(BN, {
+    "Reel cover (screen 1)": "রিল কভার (স্ক্রিন ১)",
+    "Series motto (posters)": "সিরিজের মূলমন্ত্র (পোস্টারে)",
+    "Source credit (posters)": "উৎস উল্লেখ (পোস্টারে)",
+    "Load reel cover sample": "রিল কভারের নমুনা লোড করুন",
+});
+Object.assign(BN, { "Export project (.json)": "প্রজেক্ট এক্সপোর্ট (.json)", "Import project": "প্রজেক্ট ইমপোর্ট" });
+const T = x => BN[x] || x;
+const EXP = ["attentive", "curious", "mildly surprised", "concerned", "worried", "shy", "embarrassed", "confident", "cheerful", "theatrical", "amused", "proud", "thoughtful", "skeptical", "supportive", "hopeful", "excited"];
+const POSE = ["standing", "seated at desk", "one hand raised", "pointing", "hands behind back", "leaning forward", "arms folded", "holding smartphone", "writing", "pen paused", "looking down", "explaining with gesture", "hand on shoulder", "hands empty", "holding textbook", "looking at speaker", "laughing softly"];
+const ROLE = ["Father / Shomser's brother", "Mother", "Student (girl)", "Student (boy)", "Teacher", "Shopkeeper", "Friend", "Neighbour", "Grandparent", "Online troll / scammer", "Other"];
+const AGE = ["Child", "Teen", "Young adult", "Adult", "Middle-aged", "Elderly"];
+const OUTFIT = ["Follow reference sheet", "Purple floral salwar kameez + light pink dupatta", "Cream saree with red border", "School uniform", "Panjabi", "Shirt and trousers", "Lungi and shirt", "Shopkeeper apron", "Custom (describe in notes)"];
+
+/* ===== 3. SERIES BIBLE =====
+   [id, English label, prompt heading, [[key, English label, prompt text, Bengali label], ...], default keys, Bengali title] */
+const G = [
+    ["style", "Art style", "VISUAL STYLE", [
+        ["bn", "Bengali cartoon characters", "Original Bengali cartoon characters with clean, moderately bold hand-drawn outlines", "বাংলা কার্টুন চরিত্র"],
+        ["mix", "50% realistic setting + 50% cartoon", "Balance 50% realistic environment with 50% original Bengali cartoon styling", "৫০% বাস্তব পরিবেশ + ৫০% কার্টুন"],
+        ["soft", "Soft shading, warm colors", "Soft illustrated shading and warm balanced colors", "নরম শেডিং, উষ্ণ রং"],
+        ["flat", "Flat poster look", "Flat 2D poster look, bold shapes, clear hierarchy", "ফ্ল্যাট পোস্টার লুক"],
+        ["rest", "Restrained expressions", "Restrained, relatable expressions; no theatrical overacting", "সংযত অভিব্যক্তি"],
+        ["nop", "No photoreal / 3D / neon", "Avoid photorealistic faces, generic 3D animation look, neon effects and heavy bloom", "ফটোরিয়াল / ৩ডি / নিয়ন নয়"]
+    ], ["bn","mix","soft","rest","nop"], "আর্ট স্টাইল"],
+    ["look", "Image look / mode", "IMAGE LOOK", [
+        ["cin", "Cinematic", "Cinematic 2D look: layered foreground, midground and background, natural depth, restrained effects", "সিনেমাটিক"],
+        ["prem", "Premium", "Premium, polished finish with refined details and clean composition", "প্রিমিয়াম"],
+        ["warm", "Warm", "Warm, inviting, friendly atmosphere", "উষ্ণ"],
+        ["soft", "Soft / dreamy", "Soft, gentle, slightly dreamy feel", "নরম / স্বপ্নিল"],
+        ["vib", "Vibrant", "Vibrant, lively colors with clear contrast between subjects and background", "প্রাণবন্ত রঙিন"],
+        ["pas", "Pastel", "Light pastel color palette", "প্যাস্টেল"],
+        ["dra", "Dramatic / high contrast", "Dramatic lighting with stronger contrast, faces still readable", "নাটকীয় / উচ্চ কনট্রাস্ট"],
+        ["min", "Minimal / clean", "Minimal, clean, uncluttered look", "মিনিমাল / পরিচ্ছন্ন"],
+        ["nos", "Nostalgic", "Nostalgic, slightly vintage mood", "নস্টালজিক"],
+        ["sto", "Storybook", "Storybook illustration feel", "গল্পের বইয়ের মতো"],
+        ["gls", "Glossy polish", "Glossy, high-polish finish", "চকচকে পালিশ"],
+        ["mat", "Film grain / matte", "Matte finish with very subtle film grain", "ম্যাট / ফিল্ম গ্রেইন"]
+    ], ["cin","warm"], "ছবির লুক / মোড"],
+    ["color", "Color grading", "COLOR GRADING", [
+        ["gold", "Warm golden grade", "Warm golden color grade, not oversaturated orange", "উষ্ণ সোনালি"],
+        ["teal", "Cool teal grade", "Cool teal-leaning color grade", "শীতল টিল"],
+        ["bal", "Balanced natural", "Balanced natural colors with accurate costume colors", "ভারসাম্যপূর্ণ স্বাভাবিক"],
+        ["sat", "Rich saturated", "Rich, saturated colors", "গাঢ় ও উজ্জ্বল"],
+        ["mut", "Muted / desaturated", "Muted, slightly desaturated colors", "ফিকে / কম স্যাচুরেশন"],
+        ["ear", "Earthy tones", "Earthy, natural tones", "মাটি-রঙা"]
+    ], ["bal"], "কালার গ্রেডিং"],
+    ["quality", "Finish and quality", "FINISH AND QUALITY", [
+        ["det", "Highly detailed", "Highly detailed, organized environment", "অত্যন্ত বিস্তারিত"],
+        ["line", "Clean sharp linework", "Clean, sharp, consistent linework", "পরিষ্কার ধারালো রেখা"],
+        ["dof", "Depth of field", "Gentle depth of field that keeps main characters sharp", "ডেপথ অফ ফিল্ড"],
+        ["2d", "True 2D illustration", "True 2D illustration, not a 3D render", "খাঁটি ২ডি ইলাস্ট্রেশন"],
+        ["prt", "Print-ready sharpness", "Crisp, print-ready sharpness", "প্রিন্ট-উপযোগী স্পষ্টতা"],
+        ["ser", "Series-consistent look", "Identical look and finish to the previous screens of the series", "সিরিজ জুড়ে একই লুক"]
+    ], ["det","line","2d"], "ফিনিশ ও মান"],
+    ["env", "Location", "LOCATION", [
+        ["room", "Shomser's knowledge room", "Shomser's multidisciplinary knowledge room: wooden desk on the right, tabletop projector at desk front-left aimed at the wall, projected knowledge map, bookshelf, globe, whiteboard, clock, curtains, plants, entrance on the left; slightly messy and lived-in. Never move furniture", "শমশেরের জ্ঞান-কক্ষ"],
+        ["tea", "Roadside tea stall", "Vibrant roadside tea stall in Bangladesh with kettle, glass jars, wooden bench and street activity", "রাস্তার চায়ের দোকান"],
+        ["cls", "School classroom", "Bangladeshi school classroom with benches, blackboard and posters", "স্কুলের শ্রেণিকক্ষ"],
+        ["lab", "Computer lab", "School computer lab with rows of desktop PCs", "কম্পিউটার ল্যাব"],
+        ["home", "Family living room", "Middle-class Bangladeshi living room with sofa, ceiling fan and framed photos", "পারিবারিক বসার ঘর"],
+        ["yard", "Village courtyard", "Village courtyard with tin-roof house, trees and tube-well", "গ্রামের উঠান"],
+        ["st", "Street / bus stop", "Busy Dhaka street with rickshaws, signboards and shops", "রাস্তা / বাস স্টপ"],
+        ["cafe", "Cyber café", "Small cyber café with a row of monitors", "সাইবার ক্যাফে"],
+        ["lib", "Library", "Quiet library with tall shelves and reading tables", "লাইব্রেরি"]
+    ], ["room"], "লোকেশন"],
+    ["light", "Time and lighting", "LIGHTING", [
+        ["gold", "Late-afternoon golden window", "Soft golden daylight from the left window with warm-white ceiling light", "বিকেলের সোনালি জানালার আলো"],
+        ["morn", "Morning", "Fresh soft morning daylight", "সকাল"],
+        ["noon", "Midday", "Bright midday sun with short shadows", "দুপুর"],
+        ["eve", "Evening street lamps", "Dusk with warm street lamps", "সন্ধ্যার রাস্তার বাতি"],
+        ["night", "Night, lamp and screen glow", "Night scene lit by a desk lamp and cool screen glow", "রাত, ল্যাম্প ও স্ক্রিনের আলো"],
+        ["rain", "Cloudy / rainy", "Overcast, diffuse rainy-day light", "মেঘলা / বৃষ্টি"],
+        ["proj", "Cool projector glow", "Subtle cool-white projector illumination on the wall", "প্রজেক্টরের শীতল আলো"],
+        ["even", "Evenly readable faces", "Faces evenly readable, natural falloff, restrained contrast, no harsh spotlights", "মুখ সমানভাবে স্পষ্ট"]
+    ], ["gold","proj","even"], "সময় ও আলো"],
+    ["cam", "Shot and camera", "CAMERA", [
+        ["mw", "Medium-wide conversational", "Medium-wide conversational shot, natural three-quarter view", "মিডিয়াম-ওয়াইড কথোপকথন"],
+        ["wide", "Wide establishing", "Wide establishing shot of the whole location", "ওয়াইড এস্টাব্লিশিং"],
+        ["cl", "Close-up reaction", "Close-up on one face reacting", "ক্লোজ-আপ প্রতিক্রিয়া"],
+        ["two", "Two-shot", "Two-shot of two characters", "টু-শট"],
+        ["ots", "Over-the-shoulder", "Over-the-shoulder shot", "ওভার-দ্য-শোল্ডার"],
+        ["low", "Low-angle hero", "Slight low angle for a confident hero feel", "লো-অ্যাঙ্গেল হিরো"],
+        ["lens", "35–40mm natural lens", "Natural 35–40mm cinematic framing, minimal distortion", "৩৫–৪০মিমি স্বাভাবিক লেন্স"],
+        ["lf", "Camera left-front, diagonal", "Camera at left-front looking diagonally toward the main subject", "ক্যামেরা বাম-সামনে, কোনাকুনি"],
+        ["nf", "No fisheye / top-down", "Avoid fisheye, top-down and flat front-facing framing", "ফিশআই / টপ-ডাউন নয়"]
+    ], ["mw","lens","lf","nf"], "শট ও ক্যামেরা"],
+    ["mood", "Tone", "TONE", [
+        ["fam", "Warm family comedy", "Warm family comedy, humor from personality not exaggeration", "উষ্ণ পারিবারিক কমেডি"],
+        ["edu", "Educational explainer", "Clear educational explainer", "শিক্ষামূলক ব্যাখ্যা"],
+        ["awr", "Awareness / serious", "Gentle, serious awareness message", "সচেতনতা / গম্ভীর"],
+        ["fun", "Playful and energetic", "Playful, energetic mood", "চঞ্চল ও প্রাণবন্ত"],
+        ["cel", "Celebratory", "Celebratory, uplifting mood", "উদ্‌যাপনমূলক"]
+    ], ["fam"], "টোন"],
+    ["props", "Props and tech", "PROPS", [
+        ["lap", "Laptop on desk", "Laptop on the desk", "ডেস্কে ল্যাপটপ"],
+        ["prj", "Tabletop projector → wall", "Tabletop projector whose beam travels from its lens to the wall map; never toward camera, floor or through people", "টেবিলটপ প্রজেক্টর → দেয়াল"],
+        ["map", "Knowledge map projection", "Projected multidisciplinary knowledge map, project chart and small study notes", "নলেজ ম্যাপ প্রজেকশন"],
+        ["glb", "Globe, magnifier, books", "Globe, magnifying glass, books and stationery", "গ্লোব, ম্যাগনিফায়ার, বই"],
+        ["nb", "Notebook and pen", "Open notebook and pen", "খাতা ও কলম"],
+        ["wb", "Whiteboard notes", "Whiteboard with handwritten notes", "হোয়াইটবোর্ডের নোট"],
+        ["ph", "Smartphone", "Smartphone, screen shown only if story needs it", "স্মার্টফোন"],
+        ["ict", "ICT textbook (not dominant)", "ICT textbook, not a dominant prop", "আইসিটি বই (গৌণ)"],
+        ["net", "Network / Wi-Fi icons", "Subtle network and Wi-Fi icons", "নেটওয়ার্ক / ওয়াই-ফাই আইকন"]
+    ], ["lap","prj","map","glb","nb","wb"], "প্রপস ও প্রযুক্তি"],
+    ["sym", "Poster symbols", "EDUCATIONAL VISUAL SYMBOLS (subtle)", [
+        ["bk", "Book", "Book symbol", "বই"],
+        ["ck", "Verify check mark", "Verification check mark", "যাচাই চিহ্ন"],
+        ["sh", "Security shield", "Security shield", "নিরাপত্তার ঢাল"],
+        ["rs", "Respect symbol", "Respect symbol, e.g. handshake or heart", "সম্মানের প্রতীক"]
+    ], [], "পোস্টারের প্রতীক"],
+    ["poster", "Poster text layout", "POSTER TEXT LAYOUT", [
+        ["ttl", "Large episode title, top third", "Episode title as the largest text, in the upper third inside the safe area, bold and highly readable Bengali", "বড় এপিসোড শিরোনাম, উপরের তিন ভাগে"],
+        ["mot", "Motto as tagline under title", "Series motto as a medium tagline directly under the title or series logo", "শিরোনামের নিচে মূলমন্ত্র"],
+        ["ep", "Episode number badge", "Small round badge showing the episode number", "এপিসোড নম্বর ব্যাজ"],
+        ["chap", "Chapter badge", "Small chapter badge showing the chapter number", "অধ্যায় ব্যাজ"],
+        ["src", "Source credit, small footer", "Source credit as one small, clearly legible footer line inside the safe area that never competes with the title", "ছোট ফুটারে উৎস উল্লেখ"],
+        ["reel", "Reel UI-safe margins", "Keep text clear of the bottom 20% and the right edge where reel interface buttons overlap", "রিলের বাটন এড়িয়ে নিরাপদ মার্জিন"],
+        ["min", "Minimal text, big type", "Minimal text and large type for phone viewing", "কম লেখা, বড় অক্ষর"],
+        ["hero", "Shomser as central hero", "Shomser as the central hero in a welcoming, confident pose, looking toward the viewer", "শমশের কেন্দ্রীয় নায়ক"]
+    ], ["ttl","mot","src","reel","min","hero"], "পোস্টারের লেখার বিন্যাস"],
+    ["brand", "Branding", "BRANDING", [
+        ["sticker", "Logo sticker on every laptop", "Every visible laptop lid carries the official supplied সবজান্তা শমশের sticker, matching the logo reference, as printed vinyl in correct perspective. Never redesign the logo", "প্রতিটি ল্যাপটপে লোগো স্টিকার"],
+        ["corner", "Logo bottom-right corner", "Place the supplied logo in the bottom-right corner", "লোগো নিচের ডান কোণে"],
+        ["none", "No logo", "No logo anywhere", "লোগো নয়"]
+    ], ["sticker"], "ব্র্যান্ডিং"],
+    ["text", "Text rules", "TEXT RULES", [
+        ["ex", "Exact Bengali text, no edits", "Copy all text exactly; no paraphrase, translation or shortening", "হুবহু বাংলা লেখা, পরিবর্তন নয়"],
+        ["one", "One bubble per line", "One speech bubble per dialogue line, tail pointing to its speaker", "প্রতি সংলাপে একটি বাবল"],
+        ["emp", "Empty bubble if unsure", "If exact Bengali cannot be rendered reliably, leave the bubble clean and empty", "নিশ্চিত না হলে ফাঁকা বাবল"],
+        ["noc", "No captions / narration", "No narrator captions, subtitles or extra text", "ক্যাপশন / ন্যারেশন নয়"],
+        ["safe", "Text inside safe area", "Keep all text inside the safe area, clear of faces and key gestures", "লেখা সেফ এরিয়ার ভেতরে"],
+        ["typ", "Soft off-white bubble", "Clean legible Bengali type, soft off-white bubble, thin dark outline", "নরম অফ-হোয়াইট বাবল"]
+    ], ["ex","one","emp","noc","safe","typ"], "লেখার নিয়ম"],
+    ["cont", "Continuity", "CONTINUITY", [
+        ["prev", "Continue previous screen", "Direct continuation of the previous screen; keep its room, lighting and positions", "আগের স্ক্রিনের ধারাবাহিকতা"],
+        ["sheet", "Character sheets win", "Character reference sheets override incidental differences in earlier scene images", "ক্যারেক্টার শিটই প্রধান"],
+        ["fur", "Furniture stays put", "Do not move permanent furniture or redesign the room", "আসবাব জায়গায় থাকবে"]
+    ], ["prev","sheet","fur"], "ধারাবাহিকতা"],
+    ["neg", "Do not generate", "DO NOT", [
+        ["xc", "Extra characters", "Extra characters beyond those listed", "বাড়তি চরিত্র"],
+        ["xb", "Extra bubbles / dialogue", "Extra speech bubbles or dialogue from other screens", "বাড়তি বাবল / সংলাপ"],
+        ["cos", "Changed costumes / faces", "New costumes or changed faces", "বদলানো পোশাক / চেহারা"],
+        ["bm", "Unrealistic projector beams", "Unrealistic projector beams", "অবাস্তব প্রজেক্টর রশ্মি"],
+        ["ub", "Unbranded laptops", "Unbranded visible laptops", "লোগোহীন ল্যাপটপ"],
+        ["ex", "Exaggerated crying / shock", "Exaggerated expressions or dramatic crying", "অতিরঞ্জিত কান্না / আতঙ্ক"],
+        ["out", "Content outside safe zone", "Important content outside the safe composition", "সেফ জোনের বাইরে বিষয়বস্তু"]
+    ], ["xc","xb","cos","bm","ub","ex","out"], "যা তৈরি করা যাবে না"]
+];
+
+/* ===== 4. DEFAULT STATE (D) =====
+   S (below) is the live state; D is what Reset restores. */
+const D = {
+    sel: {}, cx: {}, shom: {
+        exp: ["attentive", "curious", "mildly surprised"], pose: ["seated at desk", "leaning forward", "pen paused"], d: ""
+    },
+    chars: [{
+            n: "Father", role: ROLE[0], age: "Middle-aged", outfit: OUTFIT[0], exp: ["concerned"], pose: ["standing", "one hand raised", "hands empty"], d: "Stands left of the desk, speaks affectionately to his brother"
+        }, {
+            n: "Mother", role: "Mother", age: "Middle-aged", outfit: OUTFIT[2], exp: ["supportive", "hopeful"], pose: ["standing", "hand on shoulder"], d: ""
+        }, {
+            n: "Medha", role: "Student (girl)", age: "Teen", outfit: OUTFIT[1], exp: ["worried", "shy", "embarrassed"], pose: ["standing", "looking down"], d: "Niece of Shomser"
+        }],
+    scene: {
+        type: "Story screen",
+        num: "Episode 01 — Screen 02",
+        title: "বাবার দুশ্চিন্তা",
+        desc: "Immediately after the previous screen. Father speaks worriedly but affectionately to Shomser about Medha's ICT marks. Shomser stops writing and listens.",
+        cam: "Father left foreground, Mother and Medha left-center, Shomser right behind the desk, projection wall behind.",
+        main: "",
+        foot: "",
+        extra: ""
+    },
+    dlg: [{ sp: "Father", tx: "শমশের, তোর ভাতিজিটা এবার ICT-তে প্রয়োজনীয় নম্বর তুলতে পারেনি। কী যে করি বল তো!" }], opt: {
+        tool: "ChatGPT", w: 1080, h: 1920, safe: true
+    }, refs: []
+};
+G.forEach(g => {
+    D.sel[g[0]] = g[4];
+    D.cx[g[0]] = "";
+});
+D.scene.motto = "মুখস্থ নয়, বুঝে শেখো!";
+D.scene.src = "Source: NCTB, Information and Communication Technology, Class XI–XII, English Version, 2025–2026, Chapter 1 — Information and Communication Technology: World and Bangladesh Perspective";
+
+/* ===== 5. IMAGE-TYPE RULES =====
+   poster: promo fields on, dlg: dialogue allowed, max: most dialogue lines. */
+const TY = {
+    "Story screen": {
+        poster: 0, dlg: 1, max: 1
+    }, "Episode poster": {
+        poster: 1, dlg: 1, max: 6
+    }, "Reel cover (screen 1)": {
+        poster: 1, dlg: 1, max: 1
+    }, "Custom image": {
+        poster: 0, dlg: 0, max: 0
+    }
+};
+const PH = {
+    "scene.desc": "দৃশ্যে কী ঘটছে (ইংরেজিতে লিখলে ভালো ফল)", "scene.cam": "কে কোথায় — ঐচ্ছিক", "scene.main": "পোস্টারের মূল বার্তা (হুবহু)", "scene.src": "ইংরেজি উৎস — ছোট ফুটারে", "scene.extra": "অতিরিক্ত নির্দেশনা"
+};
+D.shom.on = true;
+D.opt.bubble = true;
+const str = (v, m = 4000) => typeof v == "string" ? v.slice(0, m) : "";
+const obj = v => v && typeof v == "object" && !Array.isArray(v) ? v : {};
+const arr = (v, ok) => Array.isArray(v) ? [...new Set(v.filter(x => typeof x == "string" && (!ok || ok.includes(x))))].slice(0, 60) : [];
+const pick = (v, l, d) => l.includes(v) ? v : d;
+
+/* ===== 6. STATE VALIDATION =====
+   Rebuilds state from known keys only; used for localStorage and JSON import. */
+function sanitize(d) {
+    const fresh = !d || typeof d != "object";
+    const o = JSON.parse(JSON.stringify(D));
+    const x = obj(d);
+    const sc = obj(x.scene);
+    const sl = obj(x.sel);
+    const cx = obj(x.cx);
+    const sh = obj(x.shom);
+    const op = obj(x.opt);
+    for (const k in o.scene) {
+        o.scene[k] = typeof sc[k] == "string" ? sc[k].slice(0, 4000) : o.scene[k];
+    }
+    o.scene.type = pick(o.scene.type, Object.keys(TY), "Story screen");
+    G.forEach(g => {
+        o.sel[g[0]] = Array.isArray(sl[g[0]]) ? arr(sl[g[0]], g[3].map(q => q[0])) : g[4];
+        o.cx[g[0]] = str(cx[g[0]]);
+    });
+    o.shom = {
+        on: sh.on !== false, exp: Array.isArray(sh.exp) ? arr(sh.exp, EXP) : D.shom.exp, pose: Array.isArray(sh.pose) ? arr(sh.pose, POSE) : D.shom.pose, d: str(sh.d, 1000), img: null
+    };
+    o.chars = (Array.isArray(x.chars) ? x.chars : (fresh ? D.chars : [])).slice(0, 12).map(c => {
+        c = obj(c);
+        return {
+            n: str(c.n, 60), role: pick(c.role, ROLE, ROLE[10]), age: pick(c.age, AGE, "Adult"), outfit: pick(c.outfit, OUTFIT, OUTFIT[0]), exp: arr(c.exp, EXP), pose: arr(c.pose, POSE), d: str(c.d, 1000), img: null
+        };
+    });
+    const dl = (Array.isArray(x.dlg) ? x.dlg : (fresh ? D.dlg : [])).slice(0, 12).map(c => {
+        c = obj(c);
+        return { sp: str(c.sp, 60), tx: str(c.tx, 1000) };
+    });
+    o.dlg = dl.length ? dl : [{ sp: "", tx: "" }];
+    o.opt = {
+        tool: pick(op.tool, ["ChatGPT", "Gemini", "Generic"], "ChatGPT"), w: Math.min(8000, Math.max(64, Math.round(+op.w) || 1080)), h: Math.min(8000, Math.max(64, Math.round(+op.h) || 1920)), safe: op.safe !== false, bubble: op.bubble !== false
+    };
+    o.refs = [];
+    return o;
+}
+let S;
+try {
+    S = JSON.parse(localStorage.getItem("sp2"));
+}
+catch (e) {
+    S = null;
+}
+S = sanitize(S);
+
+/* ===== 7. HELPERS AND UI BUILDERS ===== */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;");
+const get = p => p.split(".").reduce((o, k) => o[k], S);
+const set = (p, v) => {
+    const a = p.split(".");
+    const l = a.pop();
+    a.reduce((o, k) => o[k], S)[l] = v;
+};
+const fld = (p, l, k, o) => `<div data-fw="${p}"><label>${T(l)}</label>` + (k == "ta" ? `<textarea data-p="${p}" placeholder="${esc(PH[p] || "")}">${esc(get(p))}</textarea>` : k == "sel" ? `<select data-p="${p}">${o.map(x => `<option value="${x}"${x == get(p) ? " selected" : ""}>${T(x)}</option>`).join("")}</select>` : `<input data-p="${p}" value="${esc(get(p))}">`) + "</div>";
+const chip = (a, l, c) => `<label class="chip"><input type="checkbox" ${a}${c ? " checked" : ""}>${T(l)}</label>`;
+const sel = (l, i, k, o, v) => `<select data-l="${l}" data-i="${i}" data-k="${k}">${o.map(x => `<option value="${x}"${x == v ? " selected" : ""}>${T(x)}</option>`).join("")}</select>`;
+const attrs = (c, id) => ["exp", "pose"].map(f => `<fieldset><legend>${f == "exp" ? "মুখভঙ্গি" : "ভঙ্গি / কাজ"}</legend>${(f == "exp" ? EXP : POSE).map(x => chip(`data-ca="${id}" data-f="${f}" data-k="${x}"`, x, c[f].includes(x))).join("")}</fieldset>`).join("");
+$("#fOut").innerHTML = fld("opt.tool", "Target AI tool", "sel", ["ChatGPT", "Gemini", "Generic"]) + fld("scene.type", "Image type", "sel", ["Story screen", "Episode poster", "Reel cover (screen 1)", "Custom image"]);
+$("#fScene").innerHTML = [["scene.num", "Episode / screen label"], ["scene.title", "Title"], ["scene.desc", "Scene description and action", "ta"], ["scene.cam", "Composition and blocking", "ta"], ["scene.main", "Poster main message (posters)", "ta"], ["scene.foot", "Poster footer (posters)"], ["scene.motto", "Series motto (posters)"], ["scene.src", "Source credit (posters)", "ta"], ["scene.extra", "Extra notes", "ta"]].map(a => fld(a[0], a[1], a[2])).join("");
+$("#shomTxt").textContent = "মূল উপস্থাপক ও সিরিজের নায়ক। চেহারা, চুল, পোশাক, অনুপাত ও রং সবসময় শমশেরের রেফারেন্স শিট ও লোগো অনুযায়ী; কখনো বদলানো যাবে না। জ্ঞানী, আত্মবিশ্বাসী, আন্তরিক, খানিকটা নাটুকে। (প্রম্পটে ইংরেজি পাঠ যায়)";
+const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+const ns = [];
+while (w.nextNode())
+    ns.push(w.currentNode);
+ns.forEach(n => {
+    const k = n.nodeValue.trim();
+    if (BN[k]) {
+        n.nodeValue = n.nodeValue.replace(k, BN[k]);
+    }
+});
+document.title = BN[document.title] || document.title;
+
+/* ===== 9. TYPE RULES AND CONFLICT RESOLUTION =====
+   Which groups/fields apply to each image type, and how clashes are resolved. */
+const HG = {
+    "Story screen": ["sym", "poster"], "Episode poster": ["cont"], "Reel cover (screen 1)": [], "Custom image": ["cont", "text", "sym", "poster"]
+};
+const HF = ["scene.main", "scene.foot", "scene.motto", "scene.src"];
+const HOPT = ["one", "emp", "typ"];
+const SHOTX = ["mw", "wide", "cl", "ots"];
+const ty = () => TY[S.scene.type] || TY["Story screen"];
+const shomOn = () => S.shom.on !== false;
+const hasPT = () => HF.some(k => S.scene[k.slice(6)].trim());
+const DL = () => {
+    const c = ty();
+    return c.dlg && S.opt.bubble ? S.dlg.filter(x => x.tx.trim()).slice(0, c.max) : [];
+};
+const dact = () => DL().length > 0;
+const hg = id => (HG[S.scene.type] || []).includes(id);
+const ho = (id, k) => id == "text" && !ty().dlg && HOPT.includes(k);
+function selOf(id) {
+    let a = S.sel[id].slice();
+    if (id == "brand" && a.includes("none")) {
+        a = ["none"];
+    }
+    if (id == "cam") {
+        const f = a.filter(k => SHOTX.includes(k));
+        if (f.length > 1) {
+            a = a.filter(k => !SHOTX.includes(k) || k == f[0]);
+        }
+    }
+    if (id == "text") {
+        if (!dact()) {
+            a = a.filter(k => !HOPT.includes(k));
+        }
+        if (ty().poster && hasPT()) {
+            a = a.filter(k => k != "noc");
+        }
+    }
+    if (id == "poster" && !shomOn()) {
+        a = a.filter(k => k != "hero");
+    }
+    return a;
+}
+function refs2() {
+    const cs = (shomOn() ? [["Shomser", S.shom]] : []).concat(S.chars.filter(c => c.n).map(c => [c.n, c])).filter(x => x[1].img);
+    return { cs, all: cs.map(x => ({ role: "Character sheet", label: x[0] })).concat(S.refs) };
+}
+
+// Warnings shown above the prompt (Bengali).
+function warns() {
+    const w = [];
+    const s = S.scene;
+    const c = ty();
+    const o = S.opt;
+    const a = id => S.sel[id] || [];
+    const d = DL();
+    const nm = (shomOn() ? ["Shomser"] : []).concat(S.chars.map(q => q.n));
+    const raw = S.dlg.filter(x => x.tx.trim());
+    if (a("brand").includes("none") && a("brand").length > 1) {
+        w.push("ব্র্যান্ডিং: “লোগো নয়” ও লোগো-অপশন একসাথে টিক — প্রম্পটে “লোগো নয়” প্রাধান্য পেয়েছে।");
+    }
+    if (!hg("cam") && a("cam").filter(k => SHOTX.includes(k)).length > 1) {
+        w.push("শট: একাধিক শট-সাইজ টিক — প্রম্পটে শুধু প্রথমটি নেওয়া হয়েছে।");
+    }
+    if (c.poster && hasPT() && a("text").includes("noc")) {
+        w.push("“ক্যাপশন নয়” টিক থাকলেও পোস্টারের লেখা আছে — পোস্টারের লেখা প্রাধান্য পেয়েছে।");
+    }
+    if (c.dlg && o.bubble && !raw.length) {
+        w.push("স্পিচ বাবল চালু, কিন্তু সংলাপ ফাঁকা — প্রম্পটে বাবল থাকবে না।");
+    }
+    if (c.dlg && !o.bubble && raw.length) {
+        w.push("সংলাপ লেখা আছে, কিন্তু স্পিচ বাবল বন্ধ — সংলাপ প্রম্পটে নেই।");
+    }
+    if (d.some(x => !x.sp)) {
+        w.push("সংলাপের বক্তা নির্বাচন করুন।");
+    }
+    if (d.some(x => x.sp && !nm.includes(x.sp))) {
+        w.push("বক্তা এই ছবির চরিত্র তালিকায় নেই।");
+    }
+    if (c.max == 1 && raw.length > 1) {
+        w.push("এই ধরনে ১টির বেশি সংলাপ যায় না; শুধু প্রথমটি ব্যবহৃত হয়েছে।");
+    }
+    if (!shomOn() && a("poster").includes("hero") && !hg("poster")) {
+        w.push("“শমশের কেন্দ্রীয় নায়ক” টিক, কিন্তু শমশের বন্ধ — অপশনটি বাদ গেছে।");
+    }
+    if (s.cam.trim() && !hg("cam") && a("cam").includes("lf")) {
+        w.push("আপনার লেখা কম্পোজিশন ও “ক্যামেরা বাম-সামনে” একসাথে আছে — আপনার লেখা প্রাধান্য পেয়েছে।");
+    }
+    if (s.type == "Custom image" && a("env").includes("room")) {
+        w.push("কাস্টম ছবিতে “শমশেরের জ্ঞান-কক্ষ” টিক আছে — দরকার না হলে খুলে দিন।");
+    }
+    if (o.safe && detectRatio(+o.w, +o.h) == "custom" && Math.round(o.w * 1.25) >= o.h) {
+        w.push("এই মাপের জন্য আলাদা ফরম্যাট-নির্দেশ নেই — সাধারণ মার্জিন ব্যবহার হয়েছে।");
+    }
+    return w;
+}
+function showWarn() {
+    $("#warn").innerHTML = warns().map(x => `<div class="warn">⚠ ${esc(x)}</div>`).join("");
+}
+function showOrd() {
+    const R = refs2().all;
+    $("#ord").innerHTML = "<b>সংযুক্তির ক্রম</b> (প্রম্পটের Image নম্বরের সঙ্গে মিল):<ol>" + (R.length ? R.map(r => "<li>" + esc(T(r.role)) + ": " + esc(r.label) + "</li>").join("") : "<li>কোনো ছবি নেই</li>") + "</ol>ছবিগুলো ChatGPT/Gemini-তে আলাদাভাবে এই ক্রমে সংযুক্ত করতে হবে। .md ও .json ফাইলে ছবি থাকে না — শুধু টেক্সট ও নাম।";
+}
+function vis() {
+    const c = ty();
+    document.querySelectorAll("[data-fw]").forEach(e => e.hidden = HF.includes(e.dataset.fw) && !c.poster);
+    $("#sDlg").hidden = !c.dlg;
+    $('[data-add="dlg"]').hidden = c.max < 2;
+    $("#lDlg").classList.toggle("solo", c.max == 1);
+    $("#sDlg h2").textContent = c.max > 1 ? "সংলাপ (টেনে ক্রম বদলান)" : "সংলাপ (সর্বোচ্চ ১টি)";
+    $("#shomAt").hidden = $("#shomTxt").hidden = !shomOn();
+}
+const att = (c, id) => `<div class="att" data-slot="${id}">${c.img ? `<img class="th" src="${c.img.url}" alt=""><span class="mu">${esc(c.img.name)}</span><button data-att="rm" data-slot="${id}">সরান</button>` : `<button data-att="pick" data-slot="${id}">ক্যারেক্টার শিট সংযুক্ত করুন</button><span class="mu">অথবা ছবি এখানে ফেলুন</span>`}</div>`;
+const spk = (i, v) => {
+    const n = [...(S.shom.on !== false ? ["Shomser"] : []), ...S.chars.map(c => c.n).filter(Boolean)];
+    if (v && !n.includes(v)) {
+        n.push(v);
+    }
+    return `<select data-l="dlg" data-i="${i}" data-k="sp"><option value="">— বক্তা বাছুন —</option>${n.map(x => `<option value="${esc(x)}"${x == v ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+};
+const ROLES = ["Character sheet", "Previous screen", "Environment", "Logo", "Style", "Other"];
+
+/* ===== 8. RENDERING =====
+   Accordion, cast, dialogue and reference lists. */
+function render() {
+    $("#acc").innerHTML = G.filter(g => !hg(g[0])).map((g, k) => `<details${k == 0 ? " open" : ""}><summary>${g[5]} <span class="mu" id="n-${g[0]}"></span></summary>${g[3].filter(o => !ho(g[0], o[0])).map(o => chip(`data-g="${g[0]}" data-k="${o[0]}"`, o[3], S.sel[g[0]].includes(o[0]))).join("")}<label>নিজের যোগ করা অংশ</label><textarea data-cx="${g[0]}">${esc(S.cx[g[0]])}</textarea></details>`).join("");
+    $("#shomAt").innerHTML = att(S.shom, "s") + attrs(S.shom, "s");
+    const ctl = `<div class="b"><button data-a="up" aria-label="উপরে সরান" title="উপরে সরান">↑</button><button data-a="dn" aria-label="নিচে সরান" title="নিচে সরান">↓</button><button data-a="x" aria-label="মুছুন" title="মুছুন">✕</button></div>`;
+    $("#lChars").innerHTML = S.chars.map((c, i) => `<div class="row" data-l="chars" data-i="${i}"><div class="h" aria-hidden="true" title="Drag">⠿</div><div class="f"><div class="f two"><input data-l="chars" data-i="${i}" data-k="n" placeholder="নাম" value="${esc(c.n)}">${sel("chars", i, "role", ROLE, c.role)}${sel("chars", i, "age", AGE, c.age)}${sel("chars", i, "outfit", OUTFIT, c.outfit)}</div>${att(c, i)}${attrs(c, i)}<textarea data-l="chars" data-i="${i}" data-k="d" placeholder="নোট: চেহারা, প্রপস, সম্পর্ক">${esc(c.d)}</textarea></div>${ctl}</div>`).join("");
+    $("#lDlg").innerHTML = (S.dlg.length || S.dlg.push({ sp: "", tx: "" }), S.dlg).map((c, i) => `<div class="row" data-l="dlg" data-i="${i}"><div class="h" aria-hidden="true">⠿</div><div class="f">${spk(i, c.sp)}<textarea data-l="dlg" data-i="${i}" data-k="tx" placeholder="হুবহু বাংলা সংলাপ">${esc(c.tx)}</textarea></div>${ctl}</div>`).join("");
+    $("#lRefs").innerHTML = S.refs.map((r, i) => `<div class="row rf" data-l="refs" data-i="${i}"><div class="h" aria-hidden="true">⠿</div><img class="th" src="${r.url}" alt=""><div class="f two">${sel("refs", i, "role", ROLES, r.role)}<input data-l="refs" data-i="${i}" data-k="label" value="${esc(r.label)}"></div>${ctl}</div>`).join("");
+}
+
+/* ===== 10. PROMPT BUILDER =====
+   grp(id): one Series-bible group as a prompt section. */
+const grp = (id) => {
+    if (hg(id)) {
+        return "";
+    }
+    const g = G.find(x => x[0] == id);
+    const k = selOf(id);
+    const a = g[3].filter(o => !ho(id, o[0]) && k.includes(o[0])).map(o => "- " + o[2]);
+    if (S.cx[id].trim()) {
+        a.push("- " + S.cx[id].trim());
+    }
+    return a.length ? `## ${g[2]}\n${a.join("\n")}\n\n` : "";
+};
+
+// build(): one block per prompt section, in the order they appear in the prompt.
+function build() {
+    // -- inputs, size and aspect-ratio maths
+    const s = S.scene;
+    const o = S.opt;
+    const P = !!ty().poster;
+    const w = Math.min(8000, Math.max(64, Math.round(+o.w) || 1080));
+    const h = Math.min(8000, Math.max(64, Math.round(+o.h) || 1920));
+    const g = (a, b) => b ? g(b, a % b) : a;
+    const d = g(w, h);
+    const ori = detectRatio(w, h) == "1:1" ? "square" : w > h ? "landscape (horizontal)" : "vertical (portrait)";
+    const sec = (t, x) => x && String(x).trim() ? `## ${t}\n${String(x).trim()}\n\n` : "";
+    const pre = {
+        ChatGPT: "Generate ONE image (do not answer with text only). Use the attached reference images in the exact numbered order below.",
+        Gemini: "Create ONE image using the attached reference images in the order listed. Return the finished image, not a description.",
+        Generic: "Generate one standalone image."
+    }[o.tool];
+    const at = c => {
+        const x = [];
+        c.exp.length && x.push("expression: " + c.exp.join(", "));
+        c.pose.length && x.push("pose/action: " + c.pose.join(", "));
+        return x.length ? " In this scene — " + x.join("; ") + "." : "";
+    };
+
+    // -- header, role and reference images
+    let t = `# ${s.num}${s.title ? " — " + s.title : ""}${s.type == "Custom image" ? "" : "\nSeries: সবজান্তা শমশের (ShobJanta Shomser), original Bengali animated educational comedy"}\n\n${pre}\n\n`;
+    const roleText = s.type == "Custom image"
+        ? "You are an expert illustrator and art director. Follow only the instructions below."
+        : "You are the creative director, character-continuity supervisor, storyboard artist, cinematographer and set designer for this series. The result must look like a continuous frame of the same cartoon.";
+    t += sec("ROLE", roleText);
+    const { cs, all } = refs2();
+    const ix = c => {
+        const k = cs.findIndex(x => x[1] === c);
+        return k < 0 ? "" : ` Reference: Image ${k + 1}.`;
+    };
+    if (all.length) {
+        t += sec("REFERENCE IMAGES (attach in this exact order)", all.map((r, i) => `Image ${i + 1} — ${r.role}: ${r.label}`).join("\n"));
+    }
+
+    // -- format and safe zone
+    let fmt = `${w} × ${h} px, ${ratioLabel(w, h)} ${ori}.`;
+    if (o.safe) {
+        fmt += formatNote(w, h, dact() ? "every speech bubble and text element" : "every text element");
+    }
+    t += sec("FORMAT", fmt);
+
+    // -- look and location (Series bible)
+    t += grp("style");
+    t += grp("look");
+    t += grp("color");
+    t += grp("quality");
+    t += grp("env");
+
+    // -- cast
+    const cast = [];
+    if (shomOn()) {
+        cast.push(`- Shomser (fixed identity): ${SHOM}${at(S.shom)}${S.shom.d ? " " + S.shom.d : ""}${ix(S.shom)}`);
+    }
+    S.chars.filter(c => c.n).forEach(c => {
+        cast.push(`- ${c.n} (${c.role}, ${c.age}; outfit: ${c.outfit}):${c.d ? " " + c.d + "." : ""}${at(c)}${ix(c)}`);
+    });
+    t += sec("CHARACTERS (preserve identity, costume, face)", cast.join("\n").replace(/^(.+)$/s, "$1\nNo other characters."));
+
+    // -- scene, composition and camera
+    const priority = {
+        "Episode poster": "Promotional poster with a clear visual hierarchy: title and main message first, then hero characters and scene, then branding. The title must be large and instantly readable.",
+        "Reel cover (screen 1)": "Opening visual hook of a vertical reel: one strong focal subject, mobile-safe layout, a large readable title, minimal clutter."
+    };
+    t += sec("COMPOSITION PRIORITY", priority[s.type]);
+    t += sec(P ? "POSTER SCENARIO AND ACTION" : "SCENE", s.desc);
+    t += sec("COMPOSITION AND BLOCKING", s.cam + (s.cam.trim() && selOf("cam").length && !hg("cam") ? "\n(These notes take priority over the generic camera options below.)" : ""));
+    t += grp("cam");
+    t += grp("light");
+    t += grp("mood");
+    t += grp("props");
+    if (P) {
+        t += grp("sym");
+        t += grp("poster");
+    }
+
+    // -- dialogue: only what the user entered, nothing invented
+    const dl = DL();
+    if (dl.length) {
+        t += sec("DIALOGUE — EXACT TEXT", `Show exactly ${dl.length} speech bubble${dl.length > 1 ? "s" : ""}:\n` + dl.map((x, i) => `${i + 1}. ${x.sp ? x.sp + ": " : ""}“${x.tx.trim()}”`).join("\n") + "\nNo other dialogue anywhere; never reuse dialogue from other screens.");
+    }
+    else if (s.type != "Custom image") {
+        t += sec("DIALOGUE", "No speech bubbles and no dialogue in this image.");
+    }
+
+    // -- exact poster text (poster and reel cover only)
+    if (P) {
+        const parts = [];
+        if (s.title && s.title != s.main) {
+            parts.push(`Episode title, largest text:\n${s.title}\n\n`);
+        }
+        if (s.main) {
+            parts.push(`Main declaration, visually prominent:\n${s.main}\n\n`);
+        }
+        if (s.foot) {
+            parts.push(`Footer, clearly readable:\n${s.foot}\n\n`);
+        }
+        if (s.motto) {
+            parts.push(`Series motto, exact:\n${s.motto}\n\n`);
+        }
+        if (s.src) {
+            parts.push(`Source credit, exact English text:\n${s.src}`);
+        }
+        t += sec("POSTER TEXT — EXACT", parts.join(""));
+    }
+
+    // -- text rules, branding, continuity, notes, negatives
+    t += grp("text");
+    t += grp("brand");
+    t += grp("cont");
+    t += sec("ADDITIONAL NOTES", s.extra);
+    t += grp("neg");
+
+    // -- final instruction
+    t += sec("FINAL", s.type == "Custom image" ? "Generate one standalone image that follows only the instructions above." : "Generate one standalone illustration. Priorities: character consistency → story continuity → composition → exact text → emotion → realism → lighting → crop safety.");
+    return t.trim() + "\n";
+}
+const TIP = {
+    ChatGPT: "ছবিগুলো নম্বর অনুযায়ী সাজিয়ে সংযুক্ত করুন, তারপর প্রম্পট পেস্ট করুন। বাংলা লেখা ভুল এলে ফাঁকা বাবল চেয়ে পরে লেখা বসান।", Gemini: "আগে ছবি আপলোড করুন, তারপর প্রম্পট পেস্ট করুন; ক্রপ হলে আবার “9:16 vertical” বলে চেষ্টা করুন।", Generic: "টুল সমর্থন করলে রেফারেন্স ছবি সংযুক্ত করুন।"
+};
+
+/* ===== 11. LIVE UPDATE =====
+   man = the user edited the prompt box by hand (auto-regeneration paused). */
+let man = false;
+const rev = o => {
+    if (o && o.url) {
+        try {
+            URL.revokeObjectURL(o.url);
+        }
+        catch (e) {
+        }
+    }
+};
+// Debounced save: runs 300 ms after the last change, and always when the page is hidden/closed.
+let saveT = 0;
+function saveNow() {
+    try {
+        const c = JSON.parse(JSON.stringify(S));
+        c.refs = [];
+        c.shom.img = null;
+        c.chars.forEach(x => x.img = null);
+        localStorage.setItem("sp2", JSON.stringify(c));
+    }
+    catch (e) {
+    }
+}
+addEventListener("pagehide", saveNow);
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        saveNow();
+    }
+});
+function upd(save = true) {
+    if (!man) {
+        $("#out").value = build();
+    }
+    $("#cnt").textContent = $("#out").value.length + " অক্ষর";
+    $("#tip").textContent = TIP[S.opt.tool];
+    showWarn();
+    showOrd();
+    G.forEach(g => {
+        const n = $("#n-" + g[0]);
+        if (n) {
+            n.textContent = S.sel[g[0]].length + "টি নির্বাচিত";
+        }
+    });
+    if (save) {
+        clearTimeout(saveT);
+        saveT = setTimeout(saveNow, 300);
+    }
+}
+
+const tog = (a, k, on) => {
+    const i = a.indexOf(k);
+    on ? (i < 0 && a.push(k)) : (i >= 0 && a.splice(i, 1));
+};
+
+/* ===== 12. EVENT HANDLERS ===== */
+// Input: routes by data-attribute (chip / custom text / character chip / bound field / list row).
+document.addEventListener("input", e => {
+    const t = e.target;
+    const ds = t.dataset;
+    if (t.id == "out") {
+        // the user edited the prompt box by hand: pause auto-regeneration
+        man = true;
+        $("#manual").hidden = false;
+        $("#cnt").textContent = t.value.length + " অক্ষর";
+        return;
+    }
+    if (t.id == "file" || t.id == "libName" || t.id == "lib" || t.id == "ratio") {
+        return;
+    }
+    const v = t.type == "checkbox" ? t.checked : t.value;
+    if (ds.g) {
+        // Series-bible chip toggled
+        tog(S.sel[ds.g], ds.k, v);
+    }
+    else if (ds.cx) {
+        // Series-bible custom text
+        S.cx[ds.cx] = v;
+    }
+    else if (ds.ca) {
+        // character expression/pose chip
+        tog((ds.ca == "s" ? S.shom : S.chars[ds.ca])[ds.f], ds.k, v);
+    }
+    else if (ds.p) {
+        // plain bound field; changing image type resets Shomser/bubble defaults
+        set(ds.p, v);
+        if (ds.p == "opt.w" || ds.p == "opt.h") {
+            applyRatio(ds.p == "opt.w" ? "w" : "h", true);
+        }
+        if (ds.p == "scene.type") {
+            S.shom.on = v != "Custom image";
+            S.opt.bubble = v == "Story screen";
+            sync();
+            return;
+        }
+    }
+    else if (ds.l) {
+        // list-row field; renaming a character also renames its dialogue speaker
+        const old = S[ds.l][ds.i][ds.k];
+        S[ds.l][ds.i][ds.k] = v;
+        if (ds.l == "chars" && ds.k == "n") {
+            S.dlg.forEach(x => {
+                if (old && x.sp == old) {
+                    x.sp = v;
+                }
+            });
+            document.querySelectorAll('select[data-k="sp"]').forEach(s => {
+                s.outerHTML = spk(+s.dataset.i, S.dlg[+s.dataset.i].sp);
+            });
+        }
+    }
+    upd();
+});
+
+// Click: add buttons and row buttons (up / down / remove).
+document.addEventListener("click", e => {
+    const t = e.target;
+    const a = t.dataset.a;
+    const r = t.closest(".row");
+    if (t.dataset.add) {
+        // "+ Line" / "+ Character"
+        S[t.dataset.add].push(t.dataset.add == "chars" ? {
+            n: "", role: ROLE[10], age: "Adult", outfit: OUTFIT[0], exp: [], pose: [], d: ""
+        } : { sp: "", tx: "" });
+        render();
+        upd();
+    }
+    if (a && r) {
+        // row buttons: up / down / remove
+        const l = r.dataset.l;
+        const i = +r.dataset.i;
+        const A = S[l];
+        if (a == "x") {
+            const [rm] = A.splice(i, 1);
+            rev(rm);
+            rev(rm && rm.img);
+        }
+        else {
+            const j = i + (a == "up" ? -1 : 1);
+            if (j < 0 || j >= A.length) {
+                return;
+            }
+            [A[i], A[j]] = [A[j], A[i]];
+        }
+        render();
+        upd();
+    }
+});
+
+// Drag-and-drop reordering (drag handle on each row).
+let drag = null;
+document.addEventListener("mousedown", e => {
+    if (e.target.classList.contains("h")) {
+        e.target.closest(".row").draggable = true;
+    }
+});
+document.addEventListener("dragstart", e => {
+    const r = e.target.closest && e.target.closest(".row");
+    if (r) {
+        drag = { l: r.dataset.l, i: +r.dataset.i };
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "x");
+    }
+});
+document.addEventListener("dragend", () => {
+    document.querySelectorAll(".row").forEach(r => {
+        r.draggable = false;
+        r.classList.remove("over");
+    });
+    drag = null;
+});
+document.addEventListener("dragover", e => {
+    const r = e.target.closest && e.target.closest(".row");
+    if (drag && r && r.dataset.l == drag.l) {
+        e.preventDefault();
+        document.querySelectorAll(".over").forEach(x => x.classList.remove("over"));
+        r.classList.add("over");
+    }
+});
+document.addEventListener("drop", e => {
+    const r = e.target.closest && e.target.closest(".row");
+    if (drag && r && r.dataset.l == drag.l) {
+        e.preventDefault();
+        const A = S[drag.l];
+        const [m] = A.splice(drag.i, 1);
+        A.splice(+r.dataset.i, 0, m);
+        drag = null;
+        render();
+        upd();
+    }
+});
+
+// File attachments: reference images, md/txt notes, JSON projects.
+const guess = n => /logo|sticker/i.test(n) ? "Logo" : /screen|scene/i.test(n) ? "Previous screen" : /room|env|set/i.test(n) ? "Environment" : "Character sheet";
+function addFiles(fs) {
+    [...fs].forEach(f => {
+        if (f.type.startsWith("image/")) {
+            S.refs.push({
+                role: guess(f.name), label: f.name.replace(/\.[^.]+$/, ""), url: URL.createObjectURL(f)
+            });
+        }
+        else if (/\.json$/i.test(f.name)) {
+            impFile(f);
+        }
+        else if (/\.(md|txt)$/i.test(f.name)) {
+            const rd = new FileReader();
+            rd.onload = () => {
+                S.scene.extra = (S.scene.extra ? S.scene.extra + "\n\n" : "") + `[Imported: ${f.name}]\n` + rd.result.slice(0, 6000);
+                $('[data-p="scene.extra"]').value = S.scene.extra;
+                upd();
+            };
+            rd.readAsText(f);
+        }
+    });
+    render();
+    upd();
+}
+const dz = $("#dz");
+["dragenter", "dragover"].forEach(n => dz.addEventListener(n, e => {
+    if (e.dataTransfer.types.includes("Files")) {
+        e.preventDefault();
+        dz.classList.add("over");
+    }
+}));
+["dragleave", "drop"].forEach(n => dz.addEventListener(n, () => dz.classList.remove("over")));
+dz.addEventListener("drop", e => {
+    e.preventDefault();
+    addFiles(e.dataTransfer.files);
+});
+
+// Per-character sheet slots.
+let slot = null;
+const cf = document.createElement("input");
+cf.type = "file";
+cf.accept = "image/*";
+cf.hidden = true;
+document.body.appendChild(cf);
+const tgt = s => s == "s" ? S.shom : S.chars[s];
+function setImg(s, f) {
+    if (!f || !f.type.startsWith("image/")) {
+        return;
+    }
+    const o = tgt(s);
+    if (o.img) {
+        URL.revokeObjectURL(o.img.url);
+    }
+    o.img = { url: URL.createObjectURL(f), name: f.name };
+    render();
+    upd();
+}
+cf.onchange = e => {
+    setImg(slot, e.target.files[0]);
+    e.target.value = "";
+};
+document.addEventListener("click", e => {
+    const d = e.target.dataset;
+    if (d.att == "pick") {
+        slot = d.slot;
+        cf.click();
+    }
+    else if (d.att == "rm") {
+        const o = tgt(d.slot);
+        URL.revokeObjectURL(o.img.url);
+        o.img = null;
+        render();
+        upd();
+    }
+});
+document.addEventListener("dragover", e => {
+    const a = e.target.closest && e.target.closest(".att");
+    if (a && e.dataTransfer.types.includes("Files")) {
+        e.preventDefault();
+        a.classList.add("over");
+    }
+});
+document.addEventListener("dragleave", e => {
+    const a = e.target.closest && e.target.closest(".att");
+    a && a.classList.remove("over");
+});
+document.addEventListener("drop", e => {
+    const a = e.target.closest && e.target.closest(".att");
+    if (a && e.dataTransfer.files.length) {
+        e.preventDefault();
+        a.classList.remove("over");
+        setImg(a.dataset.slot, e.dataTransfer.files[0]);
+    }
+});
+$("#pick").onclick = () => $("#file").click();
+$("#file").onchange = e => {
+    addFiles(e.target.files);
+    e.target.value = "";
+};
+document.addEventListener("paste", e => {
+    if (e.clipboardData.files.length) {
+        addFiles(e.clipboardData.files);
+    }
+});
+
+// Toolbar buttons: copy, download, clear, sample, import/export, reset.
+$("#copy").onclick = async () => {
+    try {
+        await navigator.clipboard.writeText($("#out").value);
+    }
+    catch (e) {
+        $("#out").select();
+        document.execCommand("copy");
+    }
+    $("#copy").textContent = "কপি হয়েছে";
+    setTimeout(() => $("#copy").textContent = "প্রম্পট কপি করুন", 1200);
+};
+$("#dl").onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([$("#out").value], { type: "text/markdown" }));
+    a.download = (S.scene.num || "prompt").replace(/[^\w\u0980-\u09FF]+/g, "_") + ".md";
+    a.click();
+};
+$("#clr").onclick = () => {
+    Object.assign(S.scene, {
+        num: "", title: "", desc: "", cam: "", main: "", foot: "", extra: ""
+    });
+    S.shom.d = "";
+    S.refs.forEach(rev);
+    S.chars.forEach(c => rev(c.img));
+    S.chars = [];
+    S.dlg = [{ sp: "", tx: "" }];
+    S.refs = [];
+    S.opt.bubble = S.scene.type == "Story screen";
+    sync();
+};
+$("#smp").onclick = () => {
+    Object.assign(S.scene, {
+        type: "Reel cover (screen 1)",
+        num: "Episode 01 — Reel cover",
+        title: "ডিজিটাল দুনিয়ায় সচেতনতাই শক্তি!",
+        desc: "Opening cover of the reel. Shomser stands center as the confident host, one hand raised in a welcoming gesture, looking toward the viewer. Subtle digital-world symbols around him (smartphone, Wi-Fi, globe, shield, book). Title area in the upper third.",
+        cam: "Medium shot, Shomser centered in the lower-middle of the safe area, title above him, generous clear space for text, no other characters.",
+        main: "ডিজিটাল দুনিয়ায় সচেতনতাই শক্তি!",
+        foot: "",
+        extra: ""
+    });
+    S.refs.forEach(rev);
+    S.chars.forEach(c => rev(c.img));
+    S.shom.on = true;
+    S.opt.bubble = false;
+    S.shom.exp = ["confident", "cheerful"];
+    S.shom.pose = ["standing", "one hand raised"];
+    S.shom.d = "";
+    S.chars = [];
+    S.dlg = [{ sp: "", tx: "" }];
+    S.refs = [];
+    sync();
+};
+function impFile(f) {
+    const rd = new FileReader();
+    rd.onload = () => {
+        try {
+            const j = JSON.parse(rd.result);
+            const d = j.data || j;
+            if (!d || typeof d != "object" || !d.scene || typeof d.scene != "object" || !d.sel) {
+                throw 0;
+            }
+            S.refs.forEach(rev);
+            S.chars.forEach(c => rev(c.img));
+            rev(S.shom.img);
+            S = sanitize(d);
+            sync();
+        }
+        catch (e) {
+            alert("ফাইলটি সঠিক প্রজেক্ট JSON নয়");
+        }
+    };
+    rd.readAsText(f);
+}
+$("#exp").onclick = () => {
+    const c = JSON.parse(JSON.stringify(S));
+    c.refs = [];
+    c.shom.img = null;
+    c.chars.forEach(x => x.img = null);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({
+            app: "shomser-prompt-engine", v: 2, data: c
+        }, null, 1)], { type: "application/json" }));
+    a.download = (S.scene.num || "project").replace(/[^\w\u0980-\u09FF]+/g, "_") + ".json";
+    a.click();
+};
+$("#imp").onclick = () => $("#impf").click();
+$("#impf").onchange = e => {
+    if (e.target.files[0]) {
+        impFile(e.target.files[0]);
+    }
+    e.target.value = "";
+};
+$("#regen").onclick = () => {
+    man = false;
+    $("#manual").hidden = true;
+    upd();
+};
+$("#rst").onclick = () => {
+    if (confirm("সবকিছু নমুনায় ফিরিয়ে নেবেন?")) {
+        S.refs.forEach(rev);
+        S.chars.forEach(c => rev(c.img));
+        rev(S.shom.img);
+        S = JSON.parse(JSON.stringify(D));
+        sync();
+    }
+};
+
+// sync(): push state into the form fields, then re-render.
+function sync() {
+    document.querySelectorAll("[data-p]").forEach(el => {
+        const v = get(el.dataset.p);
+        el.type == "checkbox" ? el.checked = v : el.value = v;
+    });
+    $("#ratio").value = detectRatio(+S.opt.w, +S.opt.h);
+    ratioUI();
+    man = false;
+    $("#manual").hidden = true;
+    render();
+    vis();
+    upd();
+}
+
+/* ===== 11b. ASPECT-RATIO AUTO-ADJUST =====
+   With a preset ratio selected, changing the width sets the height (and the other way round). "custom" leaves both free. */
+const RATIOS = { "9:16": [9, 16], "4:5": [4, 5], "1:1": [1, 1], "16:9": [16, 9], "3:4": [3, 4] };
+// Pure: size for one side given the ratio; keeps the ratio inside the 64–8000 px limits.
+function fitSize(rw, rh, which, value) {
+    value = +value || 1080;
+    let w = which == "w" ? value : Math.round(value * rw / rh);
+    let h = which == "h" ? value : Math.round(value * rh / rw);
+    if (w > 8000 || h > 8000) {
+        const k = Math.min(8000 / w, 8000 / h);
+        w = Math.round(w * k);
+        h = Math.round(h * k);
+    }
+    if (w < 64 || h < 64) {
+        const k = Math.max(64 / w, 64 / h);
+        w = Math.round(w * k);
+        h = Math.round(h * k);
+    }
+    return { w: Math.max(64, Math.min(8000, w)), h: Math.max(64, Math.min(8000, h)) };
+}
+// Pure: the preset a size matches (0.4% tolerance), or "custom".
+function detectRatio(w, h) {
+    for (const k in RATIOS) {
+        if (Math.abs(w / h - RATIOS[k][0] / RATIOS[k][1]) < 0.004) {
+            return k;
+        }
+    }
+    return "custom";
+}
+// Pure: ratio text for the prompt; unknown ratios are reduced (e.g. 1350:1080 becomes 5:4).
+function ratioLabel(w, h) {
+    const key = detectRatio(w, h);
+    if (key != "custom") {
+        return key;
+    }
+    const g = (a, b) => b ? g(b, a % b) : a;
+    const d = g(w, h);
+    return w / d + ":" + h / d;
+}
+function ratioUI() {
+    $("#ratioHint").textContent = $("#ratio").value == "custom" ? "মুক্ত মোড: প্রস্থ ও উচ্চতা আলাদাভাবে বদলায়।" : "প্রস্থ বদলালে উচ্চতা, উচ্চতা বদলালে প্রস্থ নিজে ঠিক হবে।";
+}
+function showSize(which) {
+    if (which != "h") {
+        document.querySelector('[data-p="opt.w"]').value = S.opt.w;
+    }
+    if (which != "w") {
+        document.querySelector('[data-p="opt.h"]').value = S.opt.h;
+    }
+}
+// live = while typing: only the other side changes, and only once the typed value is in range.
+function applyRatio(which, live) {
+    const key = $("#ratio").value;
+    if (key == "custom") {
+        return;
+    }
+    const raw = +(which == "h" ? S.opt.h : S.opt.w) || (which == "h" ? 1920 : 1080);
+    const r = fitSize(RATIOS[key][0], RATIOS[key][1], which, raw);
+    if (live) {
+        if (raw < 64 || raw > 8000) {
+            return;
+        }
+        const other = which == "w" ? "h" : "w";
+        S.opt[other] = r[other];
+        showSize(other);
+        return;
+    }
+    S.opt.w = r.w;
+    S.opt.h = r.h;
+    showSize("both");
+}
+// Pure: predefined composition guidance for the chosen ratio. Starts every line with "\n".
+function formatNote(w, h, inside) {
+    const key = detectRatio(w, h);
+    const mg = Math.round(Math.min(w, h) * 0.05);
+    const sh = Math.round(w * 1.25);
+    const y0 = Math.round((h - sh) / 2);
+    const keep = `\nKeep all characters, faces, important gestures and ${inside} fully inside a comfortable ${mg}px margin on every side.`;
+    const edges = `\nFill the frame naturally to all four edges with the continuous scene; no artificial borders, blurred extensions, split panels or decorative padding.`;
+    if (key == "4:5" || key == "3:4") {
+        return `\nNative ${key} portrait frame (feed format): the whole frame is the final composition and no further crop is planned.` + keep + edges + `\nThe composition must be complete and understandable as a full ${key} image.`;
+    }
+    if (key == "1:1") {
+        return `\nSquare 1:1 frame: the whole frame is the final composition and no further crop is planned.` + keep + `\nPlace the main subject near the centre.` + edges + `\nThe composition must be complete and understandable as a full square image.`;
+    }
+    if (key == "16:9") {
+        return `\nLandscape 16:9 frame: the whole frame is the final composition and no further crop is planned.` + keep + `\nKeep titles and speech bubbles away from the outer edges.` + edges + `\nThe composition must be complete and understandable as a full 16:9 image.`;
+    }
+    if (sh < h) {
+        return `\nPrimary safe composition: centered ${w} × ${sh} px (4:5), X = 0–${w}, Y = ${y0}–${y0 + sh}.`
+            + `\nWithin this area keep comfortable internal margins so no important subject is cropped. All characters, faces, important gestures and ${inside} must stay fully inside it.`
+            + `\nThe extra space above and below must naturally extend the ceiling, walls, furniture and floor of the scene. No artificial borders, blurred extensions, split panels or decorative padding.`
+            + `\nThe composition must remain complete and understandable when cropped to 4:5.`;
+    }
+    return `\nThe whole frame is the final composition and no further crop is planned.` + keep + edges;
+}
+$("#ratio").onchange = () => {
+    ratioUI();
+    applyRatio("w");
+    upd();
+};
+// When a size field loses focus, tidy both values (clamps while keeping the ratio).
+document.addEventListener("change", e => {
+    const p = e.target.dataset && e.target.dataset.p;
+    if (p == "opt.w" || p == "opt.h") {
+        applyRatio(p == "opt.w" ? "w" : "h");
+        upd();
+    }
+});
+
+/* ===== 12b. PROJECT LIBRARY =====
+   Named projects kept in this browser (localStorage "sp2lib"). Images are never stored. */
+const LIBKEY = "sp2lib";
+function libEntries() {
+    try {
+        const o = JSON.parse(localStorage.getItem(LIBKEY));
+        return Array.isArray(o) ? o.filter(e => e && typeof e.name == "string" && e.data && typeof e.data == "object") : [];
+    }
+    catch (e) {
+        return [];
+    }
+}
+// Pure helper: replace the entry with the same name, or add a new one.
+function libUpsert(list, name, data) {
+    return list.filter(e => e.name != name).concat([{ name, data }]).sort((p, q) => p.name.localeCompare(q.name));
+}
+function libStore(list) {
+    try {
+        localStorage.setItem(LIBKEY, JSON.stringify(list));
+        return true;
+    }
+    catch (e) {
+        alert("সংরক্ষণ করা যায়নি (ব্রাউজারের জায়গা শেষ হতে পারে)।");
+        return false;
+    }
+}
+function snapshot() {
+    const c = JSON.parse(JSON.stringify(S));
+    c.refs = [];
+    c.shom.img = null;
+    c.chars.forEach(x => x.img = null);
+    return c;
+}
+function libRender() {
+    $("#lib").innerHTML = '<option value="">— সংরক্ষিত প্রজেক্ট —</option>' + libEntries().map(e => `<option value="${esc(e.name)}">${esc(e.name)}</option>`).join("");
+}
+$("#libSave").onclick = () => {
+    const name = ($("#libName").value || S.scene.num || "").trim().slice(0, 60);
+    if (!name) {
+        alert("প্রজেক্টের একটি নাম লিখুন।");
+        return;
+    }
+    if (libStore(libUpsert(libEntries(), name, snapshot()))) {
+        libRender();
+        $("#lib").value = name;
+    }
+};
+$("#libLoad").onclick = () => {
+    const e = libEntries().find(x => x.name == $("#lib").value);
+    if (!e) {
+        return;
+    }
+    S.refs.forEach(rev);
+    S.chars.forEach(c => rev(c.img));
+    rev(S.shom.img);
+    S = sanitize(e.data);
+    $("#libName").value = e.name;
+    sync();
+};
+$("#libDel").onclick = () => {
+    const name = $("#lib").value;
+    if (name && confirm("“" + name + "” মুছে ফেলবেন?")) {
+        libStore(libEntries().filter(e => e.name != name));
+        libRender();
+    }
+};
+libRender();
+
+/* ===== 13. SELF-TEST =====
+   Click the button under the page (or open the page with #selftest). Uses temporary states only;
+   your real project is restored afterwards and nothing is saved. */
+function runSelfTest() {
+    const keep = S;
+    const R = [];
+    const ok = (name, cond) => R.push([name, !!cond]);
+    const mk = (type) => {
+        const o = sanitize(null);
+        o.scene.type = type;
+        o.shom.on = type != "Custom image";
+        o.opt.bubble = type == "Story screen";
+        return o;
+    };
+    try {
+        // 1. Four image types: [type, Shomser, dialogue, continuity, camera]
+        for (const [type, shom, dlg, cont, cam] of [["Story screen", 1, 1, 1, 1], ["Episode poster", 1, 0, 0, 1], ["Reel cover (screen 1)", 1, 0, 1, 1], ["Custom image", 0, 0, 0, 1]]) {
+            S = mk(type);
+            const p = build();
+            ok(type + ": Shomser line " + (shom ? "present" : "absent"), /Shomser \(fixed identity\)/.test(p) == !!shom);
+            ok(type + ": dialogue " + (dlg ? "present" : "absent"), /1\. Father: /.test(p) == !!dlg);
+            ok(type + ": continuity " + (cont ? "present" : "absent"), /Direct continuation/.test(p) == !!cont);
+            ok(type + ": camera section", /## CAMERA/.test(p) == !!cam);
+        }
+        // 2. Aspect ratios and safe zone
+        for (const [w, h, label, crop] of [[1080, 1920, "9:16 vertical (portrait)", 1], [1080, 1350, "4:5 vertical (portrait)", 0], [1080, 1080, "1:1 square", 0], [1920, 1080, "16:9 landscape (horizontal)", 0]]) {
+            S = mk("Story screen");
+            S.opt.w = w;
+            S.opt.h = h;
+            const p = build();
+            ok(w + "x" + h + ": labelled " + label, p.includes(label));
+            ok(w + "x" + h + ": 4:5 crop " + (crop ? "applied" : "not applied"), p.includes("Y = 285–1635") == !!crop && !/Y = -/.test(p));
+        }
+        // 2b. Ratio auto-adjust (pure functions)
+        const f1 = fitSize(9, 16, "w", 1080);
+        const f2 = fitSize(4, 5, "h", 1350);
+        const f3 = fitSize(16, 9, "w", 1920);
+        const f4 = fitSize(9, 16, "w", 100000);
+        const f5 = fitSize(1, 1, "h", 10);
+        ok("ratio 9:16: width 1080 gives height 1920", f1.w == 1080 && f1.h == 1920);
+        ok("ratio 4:5: height 1350 gives width 1080", f2.w == 1080 && f2.h == 1350);
+        ok("ratio 16:9: width 1920 gives height 1080", f3.w == 1920 && f3.h == 1080);
+        ok("ratio is kept at the 8000 px limit", f4.h == 8000 && detectRatio(f4.w, f4.h) == "9:16");
+        ok("ratio is kept at the 64 px minimum", f5.w == 64 && f5.h == 64);
+        ok("near-ratio sizes keep a clean label", ratioLabel(1081, 1922) == "9:16" && ratioLabel(1350, 1080) == "5:4");
+        // 2c. Predefined format note per ratio
+        S = mk("Story screen");
+        S.opt.w = 1080;
+        S.opt.h = 1350;
+        const n45 = build();
+        ok("4:5 is described as a native frame, not 'does not apply'", /Native 4:5 portrait frame/.test(n45) && !/does not apply/.test(n45));
+        S.opt.h = 1080;
+        ok("1:1 gets the square note", /Square 1:1 frame/.test(build()));
+        S.opt.w = 1920;
+        ok("16:9 gets the landscape note", /Landscape 16:9 frame/.test(build()));
+        S.opt.w = 1080;
+        S.opt.h = 1920;
+        ok("9:16 keeps the centered 4:5 safe region", /Y = 285–1635/.test(build()));
+        // 3. Conflict resolution
+        S = mk("Story screen");
+        S.sel.brand = ["sticker", "none"];
+        ok("logo conflict: 'no logo' wins", /No logo anywhere/.test(build()) && !/official supplied/.test(build()));
+        S.sel.cam = ["mw", "wide"];
+        ok("two shot sizes: only the first is kept", /Medium-wide/.test(build()) && !/Wide establishing/.test(build()));
+        S = mk("Episode poster");
+        S.sel.text = ["ex", "noc"];
+        ok("poster text beats 'no captions'", !/No narrator captions/.test(build()));
+        // 4. Dialogue rules
+        S = mk("Story screen");
+        S.dlg = [{ sp: "Father", tx: "এক" }, { sp: "Mother", tx: "দুই" }];
+        ok("story: only the first dialogue line is used", /1\. Father/.test(build()) && !/2\. /.test(build()));
+        S.opt.bubble = false;
+        ok("bubble off: explicit 'no speech bubbles'", /No speech bubbles and no dialogue/.test(build()));
+        S = mk("Story screen");
+        S.dlg = [{ sp: "", tx: "" }];
+        ok("empty bubble: warning shown", warns().some(x => x.includes("ফাঁকা")));
+        // 5. Validation and import safety
+        const bad = sanitize({ scene: { type: "<img onerror=x>" }, opt: { w: -5, h: "abc", tool: "Evil" }, chars: "bad", dlg: "bad", sel: { style: ["zzz"] } });
+        ok("import: unknown type falls back", bad.scene.type == "Story screen");
+        ok("import: size and tool clamped", bad.opt.w >= 64 && bad.opt.h == 1920 && bad.opt.tool == "ChatGPT");
+        ok("import: malformed lists become empty", bad.chars.length == 0 && bad.dlg.length == 1 && bad.dlg[0].tx == "");
+        ok("import: unknown options dropped", bad.sel.style.length == 0);
+        ok("escaping: no raw < > quotes", !/[<>"']/.test(esc("<b a=\"1\">'")));
+        // 6. Project library (pure helpers, nothing is written)
+        const l1 = libUpsert([], "B", { x: 1 });
+        const l2 = libUpsert(libUpsert(l1, "A", { x: 2 }), "B", { x: 3 });
+        ok("library: same name replaces, new name adds, sorted", l2.length == 2 && l2[0].name == "A" && l2[1].data.x == 3);
+        S = mk("Story screen");
+        const lb = build();
+        ok("library: stored project rebuilds the same prompt", (S = sanitize(JSON.parse(JSON.stringify(snapshot())))) && build() == lb);
+        // 7. Labels and round-trip
+        ok("every Bible group and option has a Bengali label", G.every(g => g[5] && g[3].every(o => o[3])));
+        S = mk("Reel cover (screen 1)");
+        const before = build();
+        S = sanitize(JSON.parse(JSON.stringify(S)));
+        ok("export/import round-trip keeps the prompt", build() == before);
+    }
+    catch (e) {
+        ok("self-test crashed: " + e, false);
+    }
+    finally {
+        S = keep;
+    }
+    const failed = R.filter(r => !r[1]);
+    $("#st").innerHTML = "<b>" + (failed.length ? "✘ " + failed.length + "টি ব্যর্থ" : "✔ সব " + R.length + "টি পরীক্ষা সফল") + "</b><ul>" + R.map(r => "<li>" + (r[1] ? "✔ " : "✘ ") + esc(r[0]) + "</li>").join("") + "</ul>";
+    return R;
+}
+$("#stbtn").onclick = runSelfTest;
+if (/selftest/.test(location.search + location.hash)) {
+    runSelfTest();
+}
+
+sync();
+</script></body></html>

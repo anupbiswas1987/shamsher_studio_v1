@@ -16,3 +16,10 @@ test('recording fallback accepts WebM for later MP4 conversion',async()=>{
  assert.equal(screenRecordingMime({isTypeSupported:t=>t==='video/webm'}),'video/webm');
  assert.equal(screenRecordingMime(null),null);
 });
+
+test('export filenames preserve Bengali titles and remove path separators', async () => {
+ const {reelFilename}=await import('../src/screen-export.js');
+ assert.equal(reelFilename('আমার রিল'), 'আমার রিল.mp4');
+ assert.equal(reelFilename('  Summer / Reel: 01  ', 'webm'), 'Summer - Reel- 01.webm');
+ assert.equal(reelFilename(' ... '), 'shomshar-screens.mp4');
+});

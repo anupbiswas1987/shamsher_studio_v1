@@ -91,7 +91,7 @@ export default function SmartCampaignBuilder({ calendarDay = false, workflowId, 
   const [masterPrompt, setMasterPrompt] = useState("");
   const [masterError, setMasterError] = useState("");
   const [generatedPrompt, setGeneratedPrompt] = useState(initialState?.generatedPrompt ?? "");
-  const [feedback, setFeedback] = useState(initialState?.feedback ?? null);
+  const [feedback, setFeedbackState] = useState(initialState?.feedback ?? null);
   const [scenePrompt, setScenePrompt] = useState(initialState?.scenePrompt ?? "");
   const [copiedPrompt, setCopiedPrompt] = useState(initialState?.copiedPrompt ?? null);
   const [importText, setImportText] = useState(initialState?.importText ?? "");
@@ -138,6 +138,15 @@ export default function SmartCampaignBuilder({ calendarDay = false, workflowId, 
       active = false;
     };
   }, []);
+
+  function setFeedback(next) {
+    if (next && onNotify) {
+      onNotify(next.message, next.type);
+      setFeedbackState(null);
+    } else {
+      setFeedbackState(next);
+    }
+  }
 
   function updateValue(key, value) {
     setValues((current) => ({ ...current, [key]: value }));

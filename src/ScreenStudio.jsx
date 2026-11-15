@@ -1,3 +1,6 @@
+import { SCREEN_ASPECTS, screenAspect } from "./screen-aspect.js";
+import { videoAudioClips } from "./screen-video-audio.js";
+import ScreenNumericInput from "./ScreenNumericInput.jsx";
 import React, { useEffect, useRef, useState } from "react";
 import { download } from "./engine";
 import { LOGO_ALT, LOGO_SRC } from "./branding";
@@ -30,9 +33,10 @@ import {
   clearScreenDraft,
   draftSnapshot,
 } from "./screen-draft";
-import { SCREEN_EXPORT } from "./screen-export";
+import { SCREEN_EXPORT, reelFilename } from "./screen-export";
 import { updateVideoTiming, videoTimingFromSource } from "./screen-video.js";
 import PromptLibrary from "./PromptLibrary.jsx";
+import ScreenContinuousAnimation from "./ScreenContinuousAnimation.jsx";
 import { audioPlaybackPosition, audioShouldLoop } from "./audio-loop.js";
 const DEFAULT_MAX_SCREENS = 30;
 const DEFAULT_MAX_DURATION = 30;
@@ -94,9 +98,9 @@ function VideoTimelineField({ id, label, value, min, max, onChange }) {
   return (
     <label className="screen-time-input">
       {label}
-      <input
+      <ScreenNumericInput
         aria-label={`Screen ${id} ${label.toLowerCase()} time`}
-        type="number"
+
         min={min}
         max={max}
         step=".1"
@@ -163,7 +167,7 @@ function customTransformFor(screen, media, time, options) {
       : { x: 0, y: 0, width: 1, height: 1 };
   const sourceWidth = media.width * crop.width;
   const sourceHeight = media.height * crop.height;
-  const base = Math.min(360 / sourceWidth, 640 / sourceHeight);
+  const base = Math.min((options.width || 360) / sourceWidth, (options.height || 640) / sourceHeight);
   const baseWidth = sourceWidth * base;
   const baseHeight = sourceHeight * base;
   const scale = Math.max(
@@ -187,15 +191,18 @@ function customTransformFor(screen, media, time, options) {
     x:
       geometry.x -
       transition.x -
-      (180 + motion.x * 3.6 - fx * (totalScale - 1)),
+      ((options.width || 360) / 2 + motion.x * (options.width || 360) / 100 - fx * (totalScale - 1)),
     y:
       geometry.y -
       transition.y -
-      (320 + motion.y * 6.4 - fy * (totalScale - 1)),
+      ((options.height || 640) / 2 + motion.y * (options.height || 640) / 100 - fy * (totalScale - 1)),
   };
 }
 const styles = ["None", "Fade", "Slide left", "Slide right", "Slide up", "Slide down", "Zoom"];
 export default function ScreenStudio() {
+  const [aspectRatio, setAspectRatio] = useState("9:16");
+  const stage = screenAspect(aspectRatio);
+  const [reelTitle, setReelTitle] = useState("");
   const [activeTab, setActiveTab] = useState("Screen");
   const [selectedScreenId, setSelectedScreenId] = useState(null);
   const [reelTool, setReelTool] = useState("transform");
@@ -243,7 +250,7 @@ export default function ScreenStudio() {
   const duration=Math.max(1,...screens.filter(s=>s.src).map(s=>s.end));
   const selectedScreen = screens.find((screen) => screen.id === selectedScreenId);
   const requiredDuration=Math.max(0.1,...screens.map(s=>s.end||0),...audioClips.map((clip)=>clip.start||0));
-  live.current={screens,time,duration,playing};
+  live.current={screens,time,duration,playing,aspectRatio};
   function attachVideoRedraw(video) {
     const redraw = () => {
       requestAnimationFrame(() => {
@@ -280,7 +287,7 @@ export default function ScreenStudio() {
     update(screen.id, {
       fit,
       customTransform: media
-        ? customTransformFor(screen, media, time, { reducedMotion })
+        ? customTransformFor(screen, media, time, { reducedMotion, ...screenAspect(live.current.aspectRatio) })
         : { scale: 1, x: 0, y: 0 },
       ...(screen.fit === "crop" ? { crop: screen.crop } : {}),
     });
@@ -325,7 +332,7 @@ export default function ScreenStudio() {
     });
   }
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || notice.type === "error") return;
     const timer = window.setTimeout(() => setNotice(null), 30000);
     return () => window.clearTimeout(timer);
   }, [notice]);
@@ -593,6 +600,8 @@ export default function ScreenStudio() {
             }];
           });
           setAudioClips(audioWithUrls);
+          setAspectRatio(SCREEN_ASPECTS[draft.aspectRatio] ? draft.aspectRatio : '9:16');
+          setReelTitle(typeof draft.reelTitle === 'string' ? draft.reelTitle : '');
           setFormat(draft.format||'mp4');
           notify(
             missingAudioTracks
@@ -623,6 +632,8 @@ export default function ScreenStudio() {
     }
     const version = ++saveVersion.current;
     const snapshot=draftSnapshot({
+      aspectRatio,
+      reelTitle,
       screens,
       audioClips,
       format,
@@ -650,7 +661,7 @@ export default function ScreenStudio() {
           setDraftStatus("Draft save failed — device storage may be full");
       },
     );
-  }, [draftReady,canvasEditing,screens,audioClips,format,reducedMotion,autoOverlap,maxScreens,maxReelDuration,maxScreenDuration,maxMotionDuration,maxOverlayDuration,defaultEntry,defaultExit]);
+  }, [aspectRatio,draftReady,canvasEditing,reelTitle,screens,audioClips,format,reducedMotion,autoOverlap,maxScreens,maxReelDuration,maxScreenDuration,maxMotionDuration,maxOverlayDuration,defaultEntry,defaultExit]);
   async function discardDraft() {
     if (!window.confirm("Clear this draft and all uploaded screens and audio?"))
       return;
@@ -679,6 +690,8 @@ export default function ScreenStudio() {
       setPreviewingAudioId(null);
       setAudioPreviewPositions({});
       nextAudioId.current = 1;
+      setAspectRatio("9:16");
+      setReelTitle("");
       setFormat("mp4");
       setReducedMotion(
         window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -706,12 +719,13 @@ export default function ScreenStudio() {
     }
   }
 
-  function draw(ctx, t, list, playVideos = playing) {
+  function draw(ctx, t, list, playVideos = playing, silent = false) {
     list.forEach((screen) => {
       if (screen.mediaType !== "video") return;
       const video = images.current.get(screen.id);
       if (!(video instanceof HTMLVideoElement)) return;
       const isActive = t >= screen.start && t < screen.end;
+      video.muted = silent || exporting || screen.useVideoAudio === false;
       const sourceTime = Math.min(
         screen.sourceDuration - (screen.trimOut || 0),
         (screen.trimIn || 0) + Math.max(0, t - screen.start),
@@ -742,7 +756,7 @@ export default function ScreenStudio() {
       motionLimitedScreens,
       images.current,
       t,
-      { reducedMotion },
+      { reducedMotion, ...screenAspect(live.current.aspectRatio) },
     );
   }
   function drawSelection(ctx, t, list) {
@@ -760,7 +774,7 @@ export default function ScreenStudio() {
       { ...selected, transition: screenMotionDuration(selected, maxMotionDuration) },
       media,
       t,
-      { reducedMotion },
+      { reducedMotion, ...screenAspect(live.current.aspectRatio) },
     );
     const corners = transformedCorners(
       geometry,
@@ -791,8 +805,8 @@ export default function ScreenStudio() {
   function canvasPoint(event) {
     const rect = canvas.current.getBoundingClientRect();
     return {
-      x: ((event.clientX - rect.left) / rect.width) * 360,
-      y: ((event.clientY - rect.top) / rect.height) * 640,
+      x: ((event.clientX - rect.left) / rect.width) * stage.width,
+      y: ((event.clientY - rect.top) / rect.height) * stage.height,
     };
   }
   function onCanvasPointerDown(event) {
@@ -806,7 +820,7 @@ export default function ScreenStudio() {
             { ...selected, transition: screenMotionDuration(selected, maxMotionDuration) },
             selectedMedia,
             time,
-            { reducedMotion },
+            { reducedMotion, ...screenAspect(live.current.aspectRatio) },
           )
         : null;
     const resizeHandle = selectedGeometry
@@ -832,7 +846,7 @@ export default function ScreenStudio() {
           { ...screen, transition: screenMotionDuration(screen, maxMotionDuration) },
           media,
           time,
-          { reducedMotion },
+          { reducedMotion, ...screenAspect(live.current.aspectRatio) },
         );
         if (
           pointInPolygon(
@@ -866,7 +880,7 @@ export default function ScreenStudio() {
       { ...hit, transition: screenMotionDuration(hit, maxMotionDuration) },
       media,
       time,
-      { reducedMotion },
+      { reducedMotion, ...screenAspect(live.current.aspectRatio) },
     );
     canvasDrag.current = {
       id: hit.id,
@@ -875,7 +889,7 @@ export default function ScreenStudio() {
       start: point,
       center: { x: geometry.x, y: geometry.y },
       initialDistance: Math.max(1, Math.hypot(point.x - geometry.x, point.y - geometry.y)),
-      transform: customTransformFor(hit, media, time, { reducedMotion }),
+      transform: customTransformFor(hit, media, time, { reducedMotion, ...screenAspect(live.current.aspectRatio) }),
       moved: false,
     };
     if (event.isTrusted) canvas.current.setPointerCapture(event.pointerId);
@@ -950,7 +964,7 @@ export default function ScreenStudio() {
                 screen,
                 images.current.get(screen.id),
                 time,
-                { reducedMotion },
+                { reducedMotion, ...screenAspect(live.current.aspectRatio) },
               );
         if (event.shiftKey) {
           return {
@@ -979,10 +993,11 @@ export default function ScreenStudio() {
     );
   }
   useEffect(() => {
+    if (exporting) return;
     const ctx = canvas.current.getContext("2d");
     draw(ctx, time, screens);
     drawSelection(ctx, time, screens);
-  }, [time, screens, playing, reducedMotion, maxMotionDuration, selectedScreenId]);
+  }, [time, screens, playing, reducedMotion, maxMotionDuration, selectedScreenId, exporting, aspectRatio]);
   useEffect(()=>{
     if(!playing)return;const start=performance.now()-time*1000;let raf;
     function tick(){const t=Math.min(live.current.duration,(performance.now()-start)/1000);setTime(Math.min(live.current.duration,Math.floor(t*30)/30));if(t>=live.current.duration)setPlaying(false);else raf=requestAnimationFrame(tick)}
@@ -1251,41 +1266,49 @@ export default function ScreenStudio() {
     setPreviewingAudioId(null);
     setExporting(true);
     setTime(0);
+    const filename = reelFilename(reelTitle, format);
     let stream, ctx, sources = [], silence, rec;
+    let lastExportStatus = "Preparing video export";
+    const reportExportProgress = (message) => {
+      lastExportStatus = message;
+      setExportStatus(message);
+    };
     try {
       if (format === "mp4") {
-        const { renderScreenMp4 } = await import("./screen-offline-export");
-        const blob = await renderScreenMp4({
+        const { renderOnServer } = await import("./server-export.js");
+        const url = await renderOnServer({
+          title: reelTitle,
+          aspectRatio,
           screens: screens.map((screen) => ({
             ...screen,
             transition: screenMotionDuration(screen, maxMotionDuration),
           })),
-          images: images.current,
           duration,
           audioClips,
           reducedMotion,
-          onProgress: setExportStatus,
+          onProgress: reportExportProgress,
         });
-        const url = URL.createObjectURL(blob);
-        urls.current.add(url);
-        setResult({ url, format });
-        download(blob, "shomshar-screens.mp4");
-        notify("MP4 ready. Use Download MP4 if the download did not start.", "success");
+        setResult({ url, format, filename });
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.click();
+        notify("Server MP4 ready. Use Download MP4 if the download did not start.", "success");
         return;
       }
-      setExportStatus("Preparing video…");
+      reportExportProgress("Preparing video…");
       const mime = ["video/webm;codecs=vp8,opus", "video/webm"].find((type) =>
         globalThis.MediaRecorder?.isTypeSupported(type),
       );
       if (!mime) throw Error("Video recording is unavailable in this browser.");
       const out = document.createElement("canvas");
-      out.width = SCREEN_EXPORT.width;
-      out.height = SCREEN_EXPORT.height;
+      out.width = stage.exportWidth;
+      out.height = stage.exportHeight;
       const c = out.getContext("2d");
       const render = (t) => {
         c.save();
-        c.scale(SCREEN_EXPORT.width / 360, SCREEN_EXPORT.height / 640);
-        draw(c, t, screens, true);
+        c.scale(stage.exportWidth / stage.width, stage.exportHeight / stage.height);
+        draw(c, t, screens, true, true);
         c.restore();
         stream?.getVideoTracks()[0]?.requestFrame?.();
       };
@@ -1298,11 +1321,17 @@ export default function ScreenStudio() {
       silence.offset.value = 0;
       silence.connect(dest);
       silence.start();
-      for (const clip of audioClips) {
+      for (const clip of [...audioClips, ...videoAudioClips(screens)]) {
         if (clip.start >= duration) continue;
         const response = await fetch(clip.src);
         if (!response.ok) throw Error(`Could not read the audio track ${clip.name}.`);
-        const buffer = await ctx.decodeAudioData(await response.arrayBuffer());
+        let buffer;
+        try { buffer = await ctx.decodeAudioData(await response.arrayBuffer()); }
+        catch (error) {
+          // Silent source videos have no audio stream to decode.
+          if (clip.videoAudio) continue;
+          throw error;
+        }
         const trimStart = clip.trimStart ?? 0;
         const trimEnd = clip.trimEnd ?? 0;
         const source = ctx.createBufferSource();
@@ -1364,16 +1393,21 @@ export default function ScreenStudio() {
       let blob = new Blob(chunks, { type: mime });
       if (!blob.size)
         throw Error("Video recording was empty. Please try again.");
+      reportExportProgress("Adding video metadata…");
+      const { tagScreenWebm } = await import("./screen-offline-export");
+      blob = await tagScreenWebm(blob, reelTitle);
       const url = URL.createObjectURL(blob);
       urls.current.add(url);
-      setResult({ url, format });
-      download(blob, `shomshar-screens.${format}`);
+      setResult({ url, format, filename });
+      download(blob, filename);
       notify(
         `${format.toUpperCase()} ready. Use the download link if the download did not start.`,
         "success",
       );
     } catch (e) {
-      notify(e.message, "error");
+      console.error("Video export failed", e);
+      const reason = e instanceof Error ? e.message : String(e || "Unknown error");
+      notify(`Export failed (${lastExportStatus}). ${reason}`, "error");
     } finally {
       if (rec?.state === "recording") rec.stop();
       try {
@@ -1451,7 +1485,11 @@ export default function ScreenStudio() {
             tabIndex={0}
             hidden={activeTab !== "Screen"}
           >
-          <div className="screen-intro"><span className="eyebrow">IMAGE & VIDEO TO REEL</span><h1>Your screens. Your timeline.</h1><button
+          <div className="screen-intro"><span className="eyebrow">IMAGE & VIDEO TO REEL</span><label className="reel-title-field" htmlFor="reel-title">Reel Title
+                  <input id="reel-title" type="text" value={reelTitle} maxLength={120}
+                    placeholder="Enter your reel title" disabled={!draftReady || exporting}
+                    onChange={(event) => setReelTitle(event.target.value)} />
+                </label><button
                 className="primary"
                   disabled={!draftReady || exporting || screens.length >= maxScreens}
                   onClick={() => {
@@ -1749,10 +1787,16 @@ export default function ScreenStudio() {
                           Video crop · {(s.end - s.start).toFixed(1)}s selected of{" "}
                           {s.sourceDuration.toFixed(1)}s
                         </legend>
+                        <label className="screen-continuous-toggle">
+                          <input type="checkbox" aria-label={`Screen ${s.id} use video audio`}
+                            checked={s.useVideoAudio !== false}
+                            onChange={(event) => update(s.id, { useVideoAudio: event.target.checked })} />
+                          Use video audio
+                        </label>
                         <label>
                           Crop in (source seconds)
-                          <input
-                            type="number"
+                          <ScreenNumericInput
+
                             min="0"
                             max={Math.max(
                               0,
@@ -1767,8 +1811,8 @@ export default function ScreenStudio() {
                         </label>
                         <label>
                           Crop out (source seconds)
-                          <input
-                            type="number"
+                          <ScreenNumericInput
+
                             min={(s.trimIn || 0) + 0.1}
                             max={s.sourceDuration}
                             step=".1"
@@ -1838,6 +1882,7 @@ export default function ScreenStudio() {
                         </label>
                       </div>
                     </fieldset>
+                    <ScreenContinuousAnimation screen={s} onChange={(animation) => update(s.id, { animation })} />
                     <fieldset className="screen-control-group screen-fit-group">
                       <legend>{s.mediaType === "video" ? "Video frame fit" : "Image fit"}</legend>
                       <div className="screen-fit-options">
@@ -2304,8 +2349,8 @@ export default function ScreenStudio() {
                       <div className="screen-audio-clip-controls">
                         <label>
                           Start on reel (s)
-                          <input
-                            type="number"
+                          <ScreenNumericInput
+
                             min="0"
                             max={maxReelDuration}
                             step=".1"
@@ -2316,8 +2361,8 @@ export default function ScreenStudio() {
                         </label>
                         <label>
                           Crop in point (s)
-                          <input
-                            type="number"
+                          <ScreenNumericInput
+
                             min="0"
                             max={Math.max(0, clip.duration - trimEnd - .1)}
                             step=".1"
@@ -2328,8 +2373,8 @@ export default function ScreenStudio() {
                         </label>
                         <label>
                           Crop out point (s)
-                          <input
-                            type="number"
+                          <ScreenNumericInput
+
                             min={trimStart + .1}
                             max={clip.duration}
                             step=".1"
@@ -2555,9 +2600,10 @@ export default function ScreenStudio() {
                 <h3 id="limits-settings-heading">Project limits</h3>
                 <label className="screen-setting-field">
                   Maximum screens
-                  <input
+                  <ScreenNumericInput
                     aria-label="Maximum screens"
-                    type="number"
+                    integer
+
                     min={screens.length}
                     step="1"
                     value={maxScreensInput}
@@ -2586,9 +2632,9 @@ export default function ScreenStudio() {
                 </p>
                 <label className="screen-setting-field">
                   Maximum reel duration (seconds)
-                  <input
+                  <ScreenNumericInput
                     aria-label="Maximum reel duration (seconds)"
-                    type="number"
+
                     min={requiredDuration}
                     step="0.1"
                     value={maxReelDurationInput}
@@ -2731,11 +2777,19 @@ export default function ScreenStudio() {
           </section>
         </section>
         <aside className="screen-preview">
-          <h2>Reel preview <span>9:16</span></h2>
+          <h2>Reel preview <span>{aspectRatio}</span></h2>
+          <label className="screen-aspect-field">
+            Canvas ratio
+            <select aria-label="Reel canvas ratio" value={aspectRatio} disabled={!draftReady || exporting}
+              onChange={(event) => { setAspectRatio(event.target.value); setResult(null); }}>
+              {Object.entries(SCREEN_ASPECTS).map(([ratio, option]) => <option key={ratio} value={ratio}>{option.label}</option>)}
+            </select>
+          </label>
           <canvas
             ref={canvas}
-            width="360"
-            height="640"
+            width={stage.width}
+            height={stage.height}
+            style={{ aspectRatio: `${stage.width} / ${stage.height}`, width: aspectRatio === "9:16" ? undefined : "100%" }}
             aria-label="Screen reel preview. Select a visible screen, drag to move it, or drag the lower-right handle to resize."
             aria-describedby="screen-preview-edit-help"
             tabIndex={0}
@@ -2803,10 +2857,10 @@ export default function ScreenStudio() {
               : "Click a visible image or video to select it. Choose Custom to resize and move it in the preview."}
           </p>
             <p>
-              1080 × 1920 · 9:16 · 30 FPS
+              {stage.exportWidth} × {stage.exportHeight} · {aspectRatio} · 30 FPS
               <br />
               {format === "mp4"
-                ? "MP4 · H.264 video · AAC audio"
+                ? "MP4 · Server rendering · H.264 video · AAC audio"
                 : "WebM · VP8 video · Opus audio"}
             </p>
 
@@ -2814,7 +2868,7 @@ export default function ScreenStudio() {
             <p>
               <a
                 href={result.url}
-                download={`shomshar-screens.${result.format}`}
+                download={result.filename}
               >
                 Download {result.format.toUpperCase()}
               </a>

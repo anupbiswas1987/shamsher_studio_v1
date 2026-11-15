@@ -13,12 +13,15 @@
     "test:browser": "node scripts/check-asset-library.mjs",
     "test:cinematic": "node --test tests/cinematic.test.mjs",
     "test:screens": "node scripts/check-screens.mjs && node scripts/check-screen-sort.mjs",
-    "test:screens:mobile": "node scripts/check-screens.mjs --mobile"
+    "test:screens:mobile": "node scripts/check-screens.mjs --mobile",
+    "render:server": "node server/render-server.mjs",
+    "test:server-export": "node scripts/check-server-export.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@vitejs/plugin-react": "latest",
+    "puppeteer-core": "^25.17.0",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"

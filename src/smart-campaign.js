@@ -306,16 +306,36 @@ export function formatCampaignJson(text) {
   return JSON.stringify(parseJsonSource(text), null, 2);
 }
 
+function normalizeCampaignType(value) {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().toLowerCase().replace(/[ _]+/g, '-');
+  const aliases = { 'smart-campaing': 'smart-campaign', 'calendar-day': 'calendar-day', 'serise-story': 'series-story' };
+  return aliases[normalized] ?? normalized;
+}
+
+export function validateCampaignTab(parsed, expectedType) {
+  const labels = { 'smart-campaign': 'Smart Campaign', 'calendar-day': 'Calendar Day', 'series-story': 'Series Story' };
+  for (const key of ['type', 'tab']) {
+    if (!Object.hasOwn(parsed, key) || normalizeCampaignType(parsed[key]) === expectedType) continue;
+    throw new Error(`Campaign tab mismatch: JSON ${key} is ${labels[normalizeCampaignType(parsed[key])] ?? JSON.stringify(parsed[key])}. Open the matching tab; the current tab is ${labels[expectedType]}. No fields were imported.`);
+  }
+}
+
 export function parseCampaignImport(text, sceneOnly = false) {
   const parsed = parseJsonSource(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("JSON must contain an object of campaign fields.");
   }
-  if (parsed.type === "smart-campaign" && parsed.version !== 1) {
+  validateCampaignTab(parsed, "smart-campaign");
+  if (Object.hasOwn(parsed, "version") && parsed.version !== 1) {
     throw new Error("This campaign file version is not supported.");
   }
   let data = parsed.values ?? parsed.suggestions ?? parsed;
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Invalid campaign fields.");
+  validateCampaignTab(data, "smart-campaign");
+  if ([parsed, data].some(source => ['date', 'occasion', 'shomserDialogue'].some(key => Object.hasOwn(source, key)))) {
+    throw new Error('Campaign tab mismatch: this JSON contains Calendar Day fields. Open the Calendar Day tab to import it. No fields were imported.');
+  }
   if (Object.hasOwn(data, "title_tagline")) data = { ...data, taglineQuestion: data.title_tagline };
   const fields = sceneOnly ? [...SCENE_FIELDS, ...(Object.hasOwn(data, "title_tagline") ? ["taglineQuestion"] : []), "finalCta", "targetedInfo", "locationPreset", "crowdLevel"] : Object.keys(CAMPAIGN_INITIAL_VALUES);
   const result = {};

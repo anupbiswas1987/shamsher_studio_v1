@@ -6,6 +6,7 @@ import {
   parseCampaignImport,
   exportCampaignJson,
   formatCampaignJson,
+  validateCampaignTab,
 } from './smart-campaign.js';
 
 export const CALENDAR_DAY_INITIAL_VALUES = {
@@ -178,10 +179,14 @@ export function composeCalendarDayScenePrompt(values) {
 export function parseCalendarDayImport(text, sceneOnly = false, currentValues) {
   const parsed = JSON.parse(formatCampaignJson(text));
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw Error('JSON must contain an object of calendar fields.');
-  if (parsed.type === 'calendar-day' && parsed.version !== 1) throw Error('This calendar file version is not supported.');
+  validateCampaignTab(parsed, 'calendar-day');
+  if (Object.hasOwn(parsed, 'version') && parsed.version !== 1) throw Error('This calendar file version is not supported.');
   const data = parsed.values ?? parsed.suggestions ?? parsed;
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw Error('Invalid calendar fields.');
+  validateCampaignTab(data, 'calendar-day');
   const mapped = { ...data };
+  // Calendar-specific fields are handled here, before shared-field validation.
+  for (const key of ['date', 'occasion', 'shomserDialogue', 'type', 'tab']) delete mapped[key];
   if (Object.hasOwn(data, 'title_tagline')) mapped.taglineQuestion = data.title_tagline;
   else if (Object.hasOwn(data, 'tagline')) mapped.taglineQuestion = data.tagline;
   // Reuse the campaign importer for all common field validation and scene-only rules.

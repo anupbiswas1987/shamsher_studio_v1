@@ -43,6 +43,8 @@ export const saveScreenDraft = (draft) =>
 export const clearScreenDraft = () =>
   transaction("readwrite", (store) => store.delete("current"));
 export function draftSnapshot({
+  reelTitle = "",
+  aspectRatio = "9:16",
   screens,
   audioClips,
   audio,
@@ -77,6 +79,8 @@ export function draftSnapshot({
   const legacyAudio = storedClips[0] ?? null;
   return {
     version: 2,
+    reelTitle,
+    aspectRatio,
     screens: screens.map(({ src, ...screen }) => screen),
     audio: legacyAudio,
     audioClips: storedClips,

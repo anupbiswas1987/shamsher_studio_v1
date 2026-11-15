@@ -10,3 +10,19 @@ export function screenExportMime(recorder=globalThis.MediaRecorder){return SCREE
 export function screenRecordingMime(recorder=globalThis.MediaRecorder){
  return screenExportMime(recorder)||['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(type=>recorder?.isTypeSupported(type))||null;
 }
+
+export const SCREEN_STUDIO_CREDIT = "সবজান্তা শমশের Studio";
+export function reelFilename(title, format = "mp4") {
+  const stem = String(title || "").normalize("NFC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ").replace(/^[. ]+|[. ]+$/g, "").slice(0, 120).trim();
+  return `${stem || "shomshar-screens"}.${format}`;
+}
+export function reelMetadataArgs(title) {
+  return [
+    "-metadata", `title=${String(title || "").trim() || "Untitled reel"}`,
+    "-metadata", `artist=${SCREEN_STUDIO_CREDIT}`,
+    "-metadata", `comment=Generated from ${SCREEN_STUDIO_CREDIT}`,
+    "-metadata", `description=Generated from ${SCREEN_STUDIO_CREDIT}`,
+  ];
+}
